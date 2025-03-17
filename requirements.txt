@@ -11,3 +11,4 @@ passlib==1.7.4
 python-dotenv==1.0.0
 httpx==0.24.0 
 asyncpg
+neon
