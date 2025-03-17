@@ -15,6 +15,19 @@ class User(BaseModel):
     is_admin: bool = False
     gym_id: Optional[int] = None
 
+# Mock Gym model
+class Gym(BaseModel):
+    id: int
+    name: str
+    # Add other gym fields as needed
+
+# Mock Branch model
+class Branch(BaseModel):
+    id: int
+    gym_id: int
+    name: str
+    # Add other branch fields as needed
+
 # This is a placeholder - in a real app, get these from environment variables
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
@@ -58,4 +71,51 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions"
         )
-    return current_user 
+    return current_user
+
+async def get_current_gym(current_user: User = Depends(get_current_user)) -> Gym:
+    """
+    Dependency to get the current gym based on the authenticated user.
+    
+    This ensures that users can only access data from their own gym.
+    In a real application, you would fetch the gym from the database.
+    """
+    if current_user.gym_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not associated with any gym"
+        )
+    
+    # In a real app, you'd fetch the gym from the database using current_user.gym_id
+    # For now, return a mock gym
+    return Gym(
+        id=current_user.gym_id,
+        name="Example Gym"
+    )
+
+async def get_current_branch(
+    branch_id: int,
+    current_gym: Gym = Depends(get_current_gym)
+) -> Branch:
+    """
+    Dependency to get a specific branch within the current gym.
+    
+    This ensures that users can only access branches that belong to their gym.
+    In a real application, you would fetch the branch from the database
+    and verify it belongs to the current gym.
+    """
+    # In a real app, you'd fetch the branch from the database
+    # and verify it belongs to current_gym.id
+    
+    # Mock verification - in a real app, this would be a database query
+    if branch_id % 100 != current_gym.id % 100:  # Just a mock check
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Branch not found or does not belong to your gym"
+        )
+    
+    return Branch(
+        id=branch_id,
+        gym_id=current_gym.id,
+        name=f"Branch {branch_id}"
+    ) 
