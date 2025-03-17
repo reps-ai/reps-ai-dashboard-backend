@@ -1,6 +1,6 @@
 """
 Call repository module.
 """
-from .call_repository import CallRepository
+from .interface import CallRepository
 
 __all__ = ['CallRepository'] 

@@ -3,14 +3,14 @@ Database helper functions for lead-related operations.
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_, or_, func, desc, update
+from sqlalchemy import select, and_, or_, func, desc, update, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.lead import Lead
-from ...models.lead_tag import LeadTag
-from ...models.lead_call import LeadCall
-from ...models.lead_qualification import LeadQualification
-from ...models.campaign_lead import CampaignLead
+from ...models.lead.lead_tag import lead_tag
+from ...models.lead.tag import Tag
+from ...models.call.call_log import CallLog
+from ...models.campaign.follow_up_campaign import FollowUpCampaign
 from ....utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -37,27 +37,24 @@ async def get_lead_with_related_data(session: AsyncSession, lead_id: str) -> Opt
     lead_dict = lead.to_dict()
     
     # Get tags
-    tags_query = select(LeadTag.tag).where(LeadTag.lead_id == lead_id)
-    tags_result = await session.execute(tags_query)
-    lead_dict["tags"] = [row[0] for row in tags_result]
-    
-    # Get current qualification
-    qual_query = (
-        select(LeadQualification)
-        .where(and_(
-            LeadQualification.lead_id == lead_id,
-            LeadQualification.is_current == True
-        ))
+    tags_query = (
+        select(Tag)
+        .join(lead_tag, Tag.id == lead_tag.c.tag_id)
+        .where(lead_tag.c.lead_id == lead_id)
     )
-    qual_result = await session.execute(qual_query)
-    qualification = qual_result.scalar_one_or_none()
-    lead_dict["qualification"] = qualification.qualification if qualification else None
+    tags_result = await session.execute(tags_query)
+    tags = tags_result.scalars().all()
+    lead_dict["tags"] = [tag.to_dict() for tag in tags]
+    
+    # Get qualification from lead directly
+    lead_dict["qualification"] = lead.qualification_score
+    lead_dict["qualification_notes"] = lead.qualification_notes
     
     # Get last call
     call_query = (
-        select(LeadCall)
-        .where(LeadCall.lead_id == lead_id)
-        .order_by(desc(LeadCall.call_time))
+        select(CallLog)
+        .where(CallLog.lead_id == lead_id)
+        .order_by(desc(CallLog.created_at))
         .limit(1)
     )
     call_result = await session.execute(call_query)
@@ -83,15 +80,16 @@ def build_lead_filters(base_query, filters: Dict[str, Any]):
     if "status" in filters:
         status = filters["status"]
         if isinstance(status, list):
-            conditions.append(Lead.status.in_(status))
+            conditions.append(Lead.lead_status.in_(status))
         else:
-            conditions.append(Lead.status == status)
+            conditions.append(Lead.lead_status == status)
     
     # Search filter (name, email, phone)
     if "search" in filters and filters["search"]:
         search_term = f"%{filters['search']}%"
         conditions.append(or_(
-            Lead.name.ilike(search_term),
+            Lead.first_name.ilike(search_term),
+            Lead.last_name.ilike(search_term),
             Lead.email.ilike(search_term),
             Lead.phone.ilike(search_term)
         ))
@@ -107,33 +105,36 @@ def build_lead_filters(base_query, filters: Dict[str, Any]):
     if "tags" in filters and filters["tags"]:
         tags = filters["tags"]
         if isinstance(tags, list):
+            # Join with tags table to filter by tag names
             tag_subquery = (
-                select(LeadTag.lead_id)
-                .where(LeadTag.tag.in_(tags))
-                .group_by(LeadTag.lead_id)
-                .having(func.count(LeadTag.tag) == len(tags))
+                select(lead_tag.c.lead_id)
+                .join(Tag, Tag.id == lead_tag.c.tag_id)
+                .where(Tag.name.in_(tags))
+                .group_by(lead_tag.c.lead_id)
+                .having(func.count(lead_tag.c.tag_id) == len(tags))
             )
         else:
-            tag_subquery = select(LeadTag.lead_id).where(LeadTag.tag == tags)
+            # Single tag filter
+            tag_subquery = (
+                select(lead_tag.c.lead_id)
+                .join(Tag, Tag.id == lead_tag.c.tag_id)
+                .where(Tag.name == tags)
+            )
         
         conditions.append(Lead.id.in_(tag_subquery))
     
     # Qualification filter
     if "qualification" in filters:
         qualification = filters["qualification"]
-        qual_subquery = (
-            select(LeadQualification.lead_id)
-            .where(and_(
-                LeadQualification.qualification == qualification,
-                LeadQualification.is_current == True
-            ))
-        )
-        conditions.append(Lead.id.in_(qual_subquery))
+        # Use the qualification_score field directly
+        conditions.append(Lead.qualification_score == qualification)
     
     # Campaign filter
     if "campaign_id" in filters:
-        campaign_subquery = select(CampaignLead.lead_id).where(
-            CampaignLead.campaign_id == filters["campaign_id"]
+        # Use the relationship between leads and campaigns
+        campaign_subquery = (
+            select(FollowUpCampaign.lead_id)
+            .where(FollowUpCampaign.id == filters["campaign_id"])
         )
         conditions.append(Lead.id.in_(campaign_subquery))
     
@@ -221,51 +222,46 @@ async def update_lead_after_call_db(
     if not lead:
         return None
     
-    # Create call record
-    call_record = LeadCall(
+    # Create call log record
+    call_log = CallLog(
         lead_id=lead_id,
-        call_id=call_data.get("call_id"),
-        call_time=datetime.now(),
+        agent_user_id=call_data.get("agent_user_id"),
         duration=call_data.get("duration", 0),
+        call_type=call_data.get("call_type", "outbound"),
+        human_notes=call_data.get("notes"),
         outcome=call_data.get("outcome"),
-        notes=call_data.get("notes")
+        call_status="completed",
+        start_time=call_data.get("start_time"),
+        end_time=call_data.get("end_time") or datetime.now(),
+        recording_url=call_data.get("recording_url"),
+        transcript=call_data.get("transcript"),
+        summary=call_data.get("summary"),
+        sentiment=call_data.get("sentiment"),
+        campaign_id=call_data.get("campaign_id")
     )
-    session.add(call_record)
+    session.add(call_log)
     
     # Update lead based on call outcome
-    updates = {}
+    updates = {
+        "last_called": datetime.now()
+    }
     
     # Update status based on outcome
     outcome = call_data.get("outcome")
     if outcome == "scheduled":
-        updates["status"] = "scheduled"
+        updates["lead_status"] = "scheduled"
     elif outcome == "not_interested":
-        updates["status"] = "closed"
+        updates["lead_status"] = "closed"
     elif outcome == "callback":
-        updates["status"] = "callback"
+        updates["lead_status"] = "callback"
     
     # Update qualification if provided
     qualification = call_data.get("qualification")
     if qualification:
-        # Set all current qualifications to not current
-        update_query = (
-            update(LeadQualification)
-            .where(and_(
-                LeadQualification.lead_id == lead_id,
-                LeadQualification.is_current == True
-            ))
-            .values(is_current=False)
-        )
-        await session.execute(update_query)
-        
-        # Create new qualification record
-        new_qualification = LeadQualification(
-            lead_id=lead_id,
-            qualification=qualification,
-            is_current=True,
-            created_at=datetime.now()
-        )
-        session.add(new_qualification)
+        updates["qualification_score"] = qualification
+    
+    if call_data.get("qualification_notes"):
+        updates["qualification_notes"] = call_data.get("qualification_notes")
     
     # Update lead record if needed
     if updates:
@@ -279,16 +275,37 @@ async def update_lead_after_call_db(
     # Add tags if provided
     tags = call_data.get("tags", [])
     if tags:
-        # Get existing tags
-        existing_tags_query = select(LeadTag.tag).where(LeadTag.lead_id == lead_id)
+        # Get existing tags for this lead
+        existing_tags_query = (
+            select(Tag)
+            .join(lead_tag, Tag.id == lead_tag.c.tag_id)
+            .where(lead_tag.c.lead_id == lead_id)
+        )
         existing_tags_result = await session.execute(existing_tags_query)
-        existing_tags = [row[0] for row in existing_tags_result]
+        existing_tags = existing_tags_result.scalars().all()
+        existing_tag_names = [tag.name for tag in existing_tags]
         
         # Add only new tags
-        new_tags = [tag for tag in tags if tag not in existing_tags]
-        for tag in new_tags:
-            lead_tag = LeadTag(lead_id=lead_id, tag=tag)
-            session.add(lead_tag)
+        for tag_name in tags:
+            if tag_name not in existing_tag_names:
+                # Check if tag exists
+                tag_query = select(Tag).where(Tag.name == tag_name)
+                tag_result = await session.execute(tag_query)
+                tag = tag_result.scalar_one_or_none()
+                
+                if not tag:
+                    # Create new tag
+                    tag = Tag(name=tag_name)
+                    session.add(tag)
+                    await session.flush()  # Flush to get the ID
+                
+                # Create association
+                stmt = insert(lead_tag).values(
+                    lead_id=lead_id,
+                    tag_id=tag.id,
+                    created_at=datetime.now()
+                )
+                await session.execute(stmt)
     
     await session.commit()
     
@@ -307,7 +324,7 @@ async def get_prioritized_leads_db(
     
     Args:
         session: Database session
-        gym_id: Gym ID
+        gym_id: Gym ID (branch_id in the Lead model)
         count: Number of leads to return
         qualification: Optional qualification filter
         exclude_leads: Optional list of lead IDs to exclude
@@ -316,18 +333,11 @@ async def get_prioritized_leads_db(
         List of prioritized lead data
     """
     # Start with base query
-    base_query = select(Lead).where(Lead.gym_id == gym_id)
+    base_query = select(Lead).where(Lead.branch_id == gym_id)
     
     # Apply qualification filter if provided
     if qualification:
-        qual_subquery = (
-            select(LeadQualification.lead_id)
-            .where(and_(
-                LeadQualification.qualification == qualification,
-                LeadQualification.is_current == True
-            ))
-        )
-        base_query = base_query.where(Lead.id.in_(qual_subquery))
+        base_query = base_query.where(Lead.qualification_score == qualification)
     
     # Exclude leads if provided
     if exclude_leads:
@@ -341,20 +351,13 @@ async def get_prioritized_leads_db(
     # Get leads with no calls
     no_calls_subquery = (
         select(Lead.id)
-        .outerjoin(LeadCall, Lead.id == LeadCall.lead_id)
-        .where(LeadCall.id == None)
-        .where(Lead.gym_id == gym_id)
+        .outerjoin(CallLog, Lead.id == CallLog.lead_id)
+        .where(CallLog.id == None)
+        .where(Lead.branch_id == gym_id)
     )
     
     if qualification:
-        qual_subquery = (
-            select(LeadQualification.lead_id)
-            .where(and_(
-                LeadQualification.qualification == qualification,
-                LeadQualification.is_current == True
-            ))
-        )
-        no_calls_subquery = no_calls_subquery.where(Lead.id.in_(qual_subquery))
+        no_calls_subquery = no_calls_subquery.where(Lead.qualification_score == qualification)
     
     if exclude_leads:
         no_calls_subquery = no_calls_subquery.where(Lead.id.not_in(exclude_leads))
@@ -373,28 +376,21 @@ async def get_prioritized_leads_db(
     # Subquery to get the last call time for each lead
     last_call_subquery = (
         select(
-            LeadCall.lead_id,
-            func.max(LeadCall.call_time).label("last_call_time")
+            CallLog.lead_id,
+            func.max(CallLog.created_at).label("last_call_time")
         )
-        .group_by(LeadCall.lead_id)
+        .group_by(CallLog.lead_id)
         .subquery()
     )
     
     oldest_calls_query = (
         select(Lead)
         .join(last_call_subquery, Lead.id == last_call_subquery.c.lead_id)
-        .where(Lead.gym_id == gym_id)
+        .where(Lead.branch_id == gym_id)
     )
     
     if qualification:
-        qual_subquery = (
-            select(LeadQualification.lead_id)
-            .where(and_(
-                LeadQualification.qualification == qualification,
-                LeadQualification.is_current == True
-            ))
-        )
-        oldest_calls_query = oldest_calls_query.where(Lead.id.in_(qual_subquery))
+        oldest_calls_query = oldest_calls_query.where(Lead.qualification_score == qualification)
     
     if exclude_leads:
         oldest_calls_query = oldest_calls_query.where(Lead.id.not_in(exclude_leads))
@@ -430,7 +426,7 @@ async def get_leads_for_retry_db(
         List of lead data eligible for retry
     """
     # Get campaign leads
-    campaign_leads_query = select(CampaignLead.lead_id).where(CampaignLead.campaign_id == campaign_id)
+    campaign_leads_query = select(FollowUpCampaign.lead_id).where(FollowUpCampaign.id == campaign_id)
     campaign_leads_result = await session.execute(campaign_leads_query)
     campaign_lead_ids = [row[0] for row in campaign_leads_result]
     
@@ -443,11 +439,11 @@ async def get_leads_for_retry_db(
     # Subquery to get the last call time for each lead
     last_call_subquery = (
         select(
-            LeadCall.lead_id,
-            func.max(LeadCall.call_time).label("last_call_time")
+            CallLog.lead_id,
+            func.max(CallLog.created_at).label("last_call_time")
         )
-        .where(LeadCall.lead_id.in_(campaign_lead_ids))
-        .group_by(LeadCall.lead_id)
+        .where(CallLog.lead_id.in_(campaign_lead_ids))
+        .group_by(CallLog.lead_id)
         .subquery()
     )
     

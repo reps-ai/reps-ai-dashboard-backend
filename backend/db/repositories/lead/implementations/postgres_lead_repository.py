@@ -3,14 +3,14 @@ PostgreSQL implementation of the LeadRepository interface.
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_, or_, func, desc, update
+from sqlalchemy import select, and_, or_, func, desc, update, delete, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ....models.lead import Lead
-from ....models.lead_tag import LeadTag
-from ....models.lead_call import LeadCall
-from ....models.lead_qualification import LeadQualification
-from ....models.campaign_lead import CampaignLead
+from ....models.lead.lead_tag import lead_tag
+from ....models.lead.tag import Tag
+from ....models.call.call_log import CallLog
+from ....models.campaign.follow_up_campaign import FollowUpCampaign
 from ...lead.interface import LeadRepository
 from ....helpers.lead.lead_queries import (
     get_lead_with_related_data,
@@ -76,7 +76,6 @@ class PostgresLeadRepository(LeadRepository):
             return False
         
         # Delete lead record
-        from sqlalchemy import delete
         delete_query = delete(Lead).where(Lead.id == lead_id)
         await self.session.execute(delete_query)
         await self.session.commit()
@@ -130,25 +129,16 @@ class PostgresLeadRepository(LeadRepository):
         if not lead:
             return None
         
-        # Set all current qualifications to not current
+        # Update lead qualification directly
         update_query = (
-            update(LeadQualification)
-            .where(and_(
-                LeadQualification.lead_id == lead_id,
-                LeadQualification.is_current == True
-            ))
-            .values(is_current=False)
+            update(Lead)
+            .where(Lead.id == lead_id)
+            .values(
+                qualification_score=qualification,
+                updated_at=datetime.now()
+            )
         )
         await self.session.execute(update_query)
-        
-        # Create new qualification record
-        new_qualification = LeadQualification(
-            lead_id=lead_id,
-            qualification=qualification,
-            is_current=True,
-            created_at=datetime.now()
-        )
-        self.session.add(new_qualification)
         await self.session.commit()
         
         return await get_lead_with_related_data(self.session, lead_id)
@@ -167,16 +157,37 @@ class PostgresLeadRepository(LeadRepository):
         if not lead:
             return None
         
-        # Get existing tags
-        existing_tags_query = select(LeadTag.tag).where(LeadTag.lead_id == lead_id)
+        # Get existing tags for this lead
+        existing_tags_query = (
+            select(Tag)
+            .join(lead_tag, Tag.id == lead_tag.c.tag_id)
+            .where(lead_tag.c.lead_id == lead_id)
+        )
         existing_tags_result = await self.session.execute(existing_tags_query)
-        existing_tags = [row[0] for row in existing_tags_result]
+        existing_tags = existing_tags_result.scalars().all()
+        existing_tag_names = [tag.name for tag in existing_tags]
         
         # Add only new tags
-        new_tags = [tag for tag in tags if tag not in existing_tags]
-        for tag in new_tags:
-            lead_tag = LeadTag(lead_id=lead_id, tag=tag)
-            self.session.add(lead_tag)
+        for tag_name in tags:
+            if tag_name not in existing_tag_names:
+                # Check if tag exists
+                tag_query = select(Tag).where(Tag.name == tag_name)
+                tag_result = await self.session.execute(tag_query)
+                tag = tag_result.scalar_one_or_none()
+                
+                if not tag:
+                    # Create new tag
+                    tag = Tag(name=tag_name)
+                    self.session.add(tag)
+                    await self.session.flush()  # Flush to get the ID
+                
+                # Create association
+                stmt = insert(lead_tag).values(
+                    lead_id=lead_id,
+                    tag_id=tag.id,
+                    created_at=datetime.now()
+                )
+                await self.session.execute(stmt)
         
         await self.session.commit()
         
@@ -196,17 +207,19 @@ class PostgresLeadRepository(LeadRepository):
         if not lead:
             return None
         
-        # Delete specified tags
-        from sqlalchemy import delete
-        delete_query = (
-            delete(LeadTag)
-            .where(and_(
-                LeadTag.lead_id == lead_id,
-                LeadTag.tag.in_(tags)
+        # Get tag IDs to remove
+        tag_ids_query = select(Tag.id).where(Tag.name.in_(tags))
+        tag_ids_result = await self.session.execute(tag_ids_query)
+        tag_ids = [row[0] for row in tag_ids_result]
+        
+        if tag_ids:
+            # Delete specified tag associations
+            delete_query = delete(lead_tag).where(and_(
+                lead_tag.c.lead_id == lead_id,
+                lead_tag.c.tag_id.in_(tag_ids)
             ))
-        )
-        await self.session.execute(delete_query)
-        await self.session.commit()
+            await self.session.execute(delete_query)
+            await self.session.commit()
         
         return await get_lead_with_related_data(self.session, lead_id)
     
@@ -243,7 +256,7 @@ class PostgresLeadRepository(LeadRepository):
         
         # Count total calls
         count_query = select(func.count()).select_from(
-            select(LeadCall).where(LeadCall.lead_id == lead_id).subquery()
+            select(CallLog).where(CallLog.lead_id == lead_id).subquery()
         )
         total_count = await self.session.execute(count_query)
         total = total_count.scalar_one()
@@ -251,9 +264,9 @@ class PostgresLeadRepository(LeadRepository):
         # Get calls with pagination
         offset = (page - 1) * page_size
         calls_query = (
-            select(LeadCall)
-            .where(LeadCall.lead_id == lead_id)
-            .order_by(desc(LeadCall.call_time))
+            select(CallLog)
+            .where(CallLog.lead_id == lead_id)
+            .order_by(desc(CallLog.created_at))
             .offset(offset)
             .limit(page_size)
         )
