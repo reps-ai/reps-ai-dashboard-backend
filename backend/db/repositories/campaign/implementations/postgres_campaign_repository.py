@@ -1,4 +1,4 @@
- """
+"""
 PostgreSQL implementation of the campaign repository.
 """
 from typing import List, Dict, Any, Optional
@@ -10,6 +10,7 @@ from ..campaign_repository import CampaignRepository
 from ....models.campaign import Campaign
 from ....models.campaign_lead import CampaignLead
 from ....models.campaign_schedule import CampaignSchedule
+
 
 class PostgresCampaignRepository(CampaignRepository):
     """
