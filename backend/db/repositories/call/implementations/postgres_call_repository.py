@@ -7,10 +7,10 @@ from sqlalchemy import select, and_, or_, func, desc, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...call.interface import CallRepository
-from ....models.call_log import CallLog
+from ....models.call.call_log import CallLog
 from ....models.lead import Lead
 from ....models.campaign.follow_up_campaign import FollowUpCampaign
-from ....models.follow_up_call import FollowUpCall
+from ....models.call.follow_up_call import FollowUpCall
 from ....models.user import User
 from ....models.gym.branch import Branch
 from ....helpers.call.call_queries import (
