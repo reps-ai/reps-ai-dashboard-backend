@@ -36,4 +36,17 @@ def setup_logger(name: str, level: Optional[str] = None) -> logging.Logger:
         # Add handler to logger
         logger.addHandler(handler)
     
-    return logger 
+    return logger
+
+def get_logger(name: str, level: Optional[str] = None) -> logging.Logger:
+    """
+    Get a logger with the specified name and level.
+    
+    Args:
+        name: Name of the logger
+        level: Optional log level (defaults to LOG_LEVEL from settings)
+        
+    Returns:
+        Configured logger
+    """
+    return setup_logger(name, level) 

@@ -6,7 +6,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 
-from ..base import Base
+from ...base import Base
 
 class FollowUpCampaign(Base):
     """FollowUpCampaign model for tracking campaigns to follow up with leads."""
@@ -20,7 +20,8 @@ class FollowUpCampaign(Base):
     description = Column(Text, nullable=True)
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime, nullable=True)
-    period = Column(Integer, nullable=True)  # in days
+    frequency = Column(Integer, nullable=False)  # Frequency of follow-ups in days
+    gap = Column(Integer, nullable=False)  # Gap between follow-ups in days
     campaign_status = Column(String(50), nullable=False)  # active, completed, paused, cancelled
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

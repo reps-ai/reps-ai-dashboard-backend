@@ -73,92 +73,7 @@ class DefaultCallService(CallService):
             raise ValueError(f"Call with ID {call_id} not found")
         
         return call
-    
-    async def update_call(self, call_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update call information.
-        
-        Args:
-            call_id: ID of the call
-            call_data: Dictionary containing updated call information
-            
-        Returns:
-            Dictionary containing the updated call details
-        """
-        logger.info(f"Updating call with ID: {call_id} with data: {call_data}")
-        
-        # Update call using repository
-        updated_call = await self.call_repository.update_call(call_id, call_data)
-        
-        if not updated_call:
-            logger.warning(f"Call with ID {call_id} not found")
-            raise ValueError(f"Call with ID {call_id} not found")
-        
-        logger.info(f"Updated call with ID: {call_id}")
-        return updated_call
-    
-    async def process_call_recording(self, call_id: str, recording_url: str) -> Dict[str, Any]:
-        """
-        Process a call recording.
-        
-        Args:
-            call_id: ID of the call
-            recording_url: URL of the recording
-            
-        Returns:
-            Dictionary containing processed call details
-        """
-        logger.info(f"Processing recording for call: {call_id}")
-        
-        # Update call recording using repository
-        updated_call = await self.call_repository.update_call_recording(call_id, recording_url)
-        
-        if not updated_call:
-            logger.warning(f"Call with ID {call_id} not found")
-            raise ValueError(f"Call with ID {call_id} not found")
-        
-        logger.info(f"Processed recording for call with ID: {call_id}")
-        return updated_call
-    
-    async def generate_call_summary(self, call_id: str, transcript: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Generate a summary from a call transcript.
-        
-        Args:
-            call_id: ID of the call
-            transcript: List of transcript entries
-            
-        Returns:
-            Dictionary containing the summary and other analysis results
-        """
-        logger.info(f"Generating summary for call: {call_id}")
-        
-        # Convert transcript list to string for storage
-        transcript_text = "\n".join([f"{entry.get('speaker', 'Unknown')}: {entry.get('text', '')}" for entry in transcript])
-        
-        # Update call transcript using repository
-        updated_call = await self.call_repository.update_call_transcript(call_id, transcript_text)
-        
-        if not updated_call:
-            logger.warning(f"Call with ID {call_id} not found")
-            raise ValueError(f"Call with ID {call_id} not found")
-        
-        # Generate summary (placeholder implementation)
-        # In a real implementation, you would use NLP to generate a summary
-        summary = "This is a placeholder summary of the call."
-        sentiment = "neutral"
-        
-        # Update call metrics with summary and sentiment
-        metrics_data = {
-            "summary": summary,
-            "sentiment": sentiment
-        }
-        
-        updated_call = await self.call_repository.update_call_metrics(call_id, metrics_data)
-        
-        logger.info(f"Generated summary for call with ID: {call_id}")
-        return updated_call
-    
+      
     async def get_calls_by_campaign(self, campaign_id: str) -> List[Dict[str, Any]]:
         """
         Get calls for a campaign.
@@ -290,6 +205,12 @@ class DefaultCallService(CallService):
             logger.warning(f"Unknown event type: {event_type}")
             return {"status": "error", "message": f"Unknown event type: {event_type}"}
     
+
+
+
+
+    
+    #Optional.
     async def create_follow_up_call(self, follow_up_call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a follow-up call.
@@ -315,6 +236,7 @@ class DefaultCallService(CallService):
         logger.info(f"Created follow-up call with ID: {follow_up_call.get('id')}")
         return follow_up_call
     
+    #Optional. 
     async def get_follow_up_call(self, follow_up_call_id: str) -> Dict[str, Any]:
         """
         Get follow-up call details by ID.
@@ -334,6 +256,7 @@ class DefaultCallService(CallService):
         
         return follow_up_call
     
+    #Optional.
     async def update_follow_up_call(self, follow_up_call_id: str, follow_up_call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update follow-up call information.
@@ -357,6 +280,7 @@ class DefaultCallService(CallService):
         logger.info(f"Updated follow-up call with ID: {follow_up_call_id}")
         return updated_follow_up_call
     
+    #Optional. 
     async def delete_follow_up_call(self, follow_up_call_id: str) -> bool:
         """
         Delete a follow-up call.
@@ -379,6 +303,7 @@ class DefaultCallService(CallService):
         logger.info(f"Deleted follow-up call with ID: {follow_up_call_id}")
         return True
     
+    #Optional.
     async def get_follow_up_calls_by_campaign(self, campaign_id: str) -> List[Dict[str, Any]]:
         """
         Get follow-up calls for a campaign.
@@ -396,6 +321,7 @@ class DefaultCallService(CallService):
         
         return follow_up_calls_result.get("follow_up_calls", [])
     
+    #Optional.
     async def get_follow_up_calls_by_lead(self, lead_id: str) -> List[Dict[str, Any]]:
         """
         Get follow-up calls for a lead.
@@ -412,3 +338,94 @@ class DefaultCallService(CallService):
         follow_up_calls_result = await self.call_repository.get_follow_up_calls_by_lead(lead_id)
         
         return follow_up_calls_result.get("follow_up_calls", []) 
+    
+
+    #Optional. 
+    async def update_call(self, call_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update call information.
+        
+        Args:
+            call_id: ID of the call
+            call_data: Dictionary containing updated call information
+            
+        Returns:
+            Dictionary containing the updated call details
+        """
+        logger.info(f"Updating call with ID: {call_id} with data: {call_data}")
+        
+        # Update call using repository
+        updated_call = await self.call_repository.update_call(call_id, call_data)
+        
+        if not updated_call:
+            logger.warning(f"Call with ID {call_id} not found")
+            raise ValueError(f"Call with ID {call_id} not found")
+        
+        logger.info(f"Updated call with ID: {call_id}")
+        return updated_call
+    
+
+    #Optional.
+    async def process_call_recording(self, call_id: str, recording_url: str) -> Dict[str, Any]:
+        """
+        Process a call recording.
+        
+        Args:
+            call_id: ID of the call
+            recording_url: URL of the recording
+            
+        Returns:
+            Dictionary containing processed call details
+        """
+        logger.info(f"Processing recording for call: {call_id}")
+        
+        # Update call recording using repository
+        updated_call = await self.call_repository.update_call_recording(call_id, recording_url)
+        
+        if not updated_call:
+            logger.warning(f"Call with ID {call_id} not found")
+            raise ValueError(f"Call with ID {call_id} not found")
+        
+        logger.info(f"Processed recording for call with ID: {call_id}")
+        return updated_call
+    
+    #Optional.
+    async def generate_call_summary(self, call_id: str, transcript: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Generate a summary from a call transcript.
+        
+        Args:
+            call_id: ID of the call
+            transcript: List of transcript entries
+            
+        Returns:
+            Dictionary containing the summary and other analysis results
+        """
+        logger.info(f"Generating summary for call: {call_id}")
+        
+        # Convert transcript list to string for storage
+        transcript_text = "\n".join([f"{entry.get('speaker', 'Unknown')}: {entry.get('text', '')}" for entry in transcript])
+        
+        # Update call transcript using repository
+        updated_call = await self.call_repository.update_call_transcript(call_id, transcript_text)
+        
+        if not updated_call:
+            logger.warning(f"Call with ID {call_id} not found")
+            raise ValueError(f"Call with ID {call_id} not found")
+        
+        # Generate summary (placeholder implementation)
+        # In a real implementation, you would use NLP to generate a summary
+        summary = "This is a placeholder summary of the call."
+        sentiment = "neutral"
+        
+        # Update call metrics with summary and sentiment
+        metrics_data = {
+            "summary": summary,
+            "sentiment": sentiment
+        }
+        
+        updated_call = await self.call_repository.update_call_metrics(call_id, metrics_data)
+        
+        logger.info(f"Generated summary for call with ID: {call_id}")
+        return updated_call
+  

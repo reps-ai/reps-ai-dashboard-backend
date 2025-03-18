@@ -118,4 +118,28 @@ class LeadService(ABC):
         Returns:
             List of leads with the specified status
         """
+        pass
+    
+    @abstractmethod
+    async def get_paginated_leads(
+        self,
+        gym_id: str,
+        page: int = 1,
+        page_size: int = 50,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Get paginated leads for a gym with optional filters.
+        
+        Args:
+            gym_id: ID of the gym
+            page: Page number (1-based)
+            page_size: Number of leads per page
+            filters: Optional dictionary of filter criteria
+            
+        Returns:
+            Dictionary containing:
+                - leads: List of lead data
+                - pagination: Dictionary with total, page, page_size, and pages
+        """
         pass 

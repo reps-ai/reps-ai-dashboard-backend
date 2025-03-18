@@ -6,7 +6,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 
-from ..base import Base
+from ...base import Base
 
 class Tag(Base):
     """Tag model for categorizing leads."""

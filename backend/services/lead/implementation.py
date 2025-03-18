@@ -18,7 +18,7 @@ class DefaultLeadService(LeadService):
     def __init__(self, lead_repository: LeadRepository):
         """
         Initialize the lead service.
-
+        
         Args:
             lead_repository: Repository for lead operations
         """
@@ -192,4 +192,40 @@ class DefaultLeadService(LeadService):
         leads = await self.lead_repository.get_leads_by_status(gym_id, status)
         
         logger.info(f"Retrieved {len(leads)} leads with status '{status}' for gym: {gym_id}")
-        return leads 
+        return leads
+    
+    async def get_paginated_leads(
+        self,
+        gym_id: str,
+        page: int = 1,
+        page_size: int = 50,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Get paginated leads for a gym with optional filters.
+        
+        Args:
+            gym_id: ID of the gym
+            page: Page number (1-based)
+            page_size: Number of leads per page
+            filters: Optional dictionary of filter criteria
+            
+        Returns:
+            Dictionary containing:
+                - leads: List of lead data
+                - pagination: Dictionary with total, page, page_size, and pages
+        """
+        result = await self.lead_repository.get_leads_by_gym(
+            gym_id=gym_id,
+            filters=filters,
+            page=page,
+            page_size=page_size
+        )
+        
+        leads = result.get('leads', [])
+        pagination = result.get('pagination', {})
+        logger.info(
+            f"Retrieved {len(leads)} leads for gym: {gym_id}, "
+            f"page: {page}, total: {pagination.get('total', 0)}"
+        )
+        return result 

@@ -6,7 +6,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 
-from ..base import Base
+from ...base import Base
 
 class Branch(Base):
     """Branch model for storing gym branch information."""
