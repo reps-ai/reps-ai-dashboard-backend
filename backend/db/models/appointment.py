@@ -5,6 +5,7 @@ from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, Foreign
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uuid import uuid4
+from sqlalchemy.dialects.postgresql import UUID
 
 from ..base import Base
 
@@ -14,6 +15,7 @@ class Appointment(Base):
     __tablename__ = "appointments"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
     lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
     branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
     employee_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
@@ -29,6 +31,7 @@ class Appointment(Base):
     employee_name = Column(String(255), nullable=True)  # In case employee is not a system user
     
     # Relationships
+    gym = relationship("Gym", back_populates="appointments")
     lead = relationship("Lead", back_populates="appointments")
     branch = relationship("Branch", back_populates="appointments")
     employee = relationship("User", foreign_keys=[employee_user_id], back_populates="appointments_as_employee")
@@ -38,6 +41,7 @@ class Appointment(Base):
         """Convert the model instance to a dictionary."""
         return {
             "id": self.id,
+            "gym_id": self.gym_id,
             "lead_id": self.lead_id,
             "branch_id": self.branch_id,
             "employee_user_id": self.employee_user_id,

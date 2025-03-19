@@ -1,10 +1,11 @@
 """
 Branch model for storing gym branch information.
 """
-from sqlalchemy import Column, String, Text, DateTime, Boolean
+from sqlalchemy import Column, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from uuid import uuid4
+from sqlalchemy.dialects.postgresql import UUID
 
 from ...base import Base
 
@@ -14,6 +15,7 @@ class Branch(Base):
     __tablename__ = "branches"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=True)
     name = Column(String(255), nullable=False)
     address = Column(Text, nullable=True)
     phone = Column(String(20), nullable=True)
@@ -23,6 +25,7 @@ class Branch(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationships
+    gym = relationship("Gym", back_populates="branches")
     leads = relationship("Lead", back_populates="branch")
     appointments = relationship("Appointment", back_populates="branch")
     members = relationship("Member", back_populates="branch")
@@ -38,6 +41,7 @@ class Branch(Base):
         """Convert the model instance to a dictionary."""
         return {
             "id": self.id,
+            "gym_id": self.gym_id,
             "name": self.name,
             "address": self.address,
             "phone": self.phone,

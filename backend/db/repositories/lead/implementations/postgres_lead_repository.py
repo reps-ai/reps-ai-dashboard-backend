@@ -84,7 +84,7 @@ class PostgresLeadRepository(LeadRepository):
     
     async def get_leads_by_gym(
         self,
-        gym_id: str,
+        branch_id: str,
         filters: Optional[Dict[str, Any]] = None,
         page: int = 1,
         page_size: int = 50
@@ -92,7 +92,7 @@ class PostgresLeadRepository(LeadRepository):
         """Get all leads for a gym with optional filters."""
         return await get_leads_by_gym_with_filters(
             self.session,
-            gym_id,
+            branch_id,
             filters,
             page,
             page_size
@@ -306,3 +306,43 @@ class PostgresLeadRepository(LeadRepository):
     ) -> List[Dict[str, Any]]:
         """Get leads eligible for retry calls."""
         return await get_leads_for_retry_db(self.session, campaign_id, gap_days) 
+    
+
+    async def update_lead_notes(self, lead_id: str, notes: str) -> Optional[Dict[str, Any]]:
+        """
+        Update lead notes.
+
+        Args:
+            lead_id: Unique identifier of the lead
+            notes: New notes content
+
+        Returns:
+            Updated lead data if successful, None if lead not found
+        """
+        pass
+
+    async def get_leads_by_status(self, gym_id: str, status: str) -> List[Dict[str, Any]]:
+        """
+        Get leads by status.
+
+        Args:
+            gym_id: Unique identifier of the gym
+            status: Status to filter by
+
+        Returns:
+            List of lead data with the specified status
+        """
+        pass
+
+    async def update_lead_status(self, lead_id: str, status: str) -> Optional[Dict[str, Any]]:
+        """
+        Update lead status.
+
+        Args:
+            lead_id: Unique identifier of the lead
+            status: New status
+
+        Returns:
+            Updated lead data if successful, None if lead not found
+        """
+        pass

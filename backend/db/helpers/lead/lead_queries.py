@@ -145,7 +145,7 @@ def build_lead_filters(base_query, filters: Dict[str, Any]):
 
 async def get_leads_by_gym_with_filters(
     session: AsyncSession,
-    gym_id: str,
+    branch_id: str,
     filters: Optional[Dict[str, Any]] = None,
     page: int = 1,
     page_size: int = 50
@@ -155,7 +155,7 @@ async def get_leads_by_gym_with_filters(
     
     Args:
         session: Database session
-        gym_id: Gym ID
+        branch_id: Gym ID
         filters: Optional filters
         page: Page number
         page_size: Page size
@@ -164,7 +164,7 @@ async def get_leads_by_gym_with_filters(
         Dictionary containing leads and pagination info
     """
     # Start with base query
-    base_query = select(Lead).where(Lead.gym_id == gym_id)
+    base_query = select(Lead).where(Lead.branch_id == branch_id)
     
     # Apply filters
     if filters:
@@ -314,7 +314,7 @@ async def update_lead_after_call_db(
 
 async def get_prioritized_leads_db(
     session: AsyncSession,
-    gym_id: str,
+    branch_id: str,
     count: int,
     qualification: Optional[str] = None,
     exclude_leads: Optional[List[str]] = None
@@ -324,7 +324,7 @@ async def get_prioritized_leads_db(
     
     Args:
         session: Database session
-        gym_id: Gym ID (branch_id in the Lead model)
+        branch_id: Gym ID (branch_id in the Lead model)
         count: Number of leads to return
         qualification: Optional qualification filter
         exclude_leads: Optional list of lead IDs to exclude
@@ -333,7 +333,7 @@ async def get_prioritized_leads_db(
         List of prioritized lead data
     """
     # Start with base query
-    base_query = select(Lead).where(Lead.branch_id == gym_id)
+    base_query = select(Lead).where(Lead.branch_id == branch_id)
     
     # Apply qualification filter if provided
     if qualification:
@@ -353,7 +353,7 @@ async def get_prioritized_leads_db(
         select(Lead.id)
         .outerjoin(CallLog, Lead.id == CallLog.lead_id)
         .where(CallLog.id == None)
-        .where(Lead.branch_id == gym_id)
+        .where(Lead.branch_id == branch_id)
     )
     
     if qualification:
@@ -386,7 +386,7 @@ async def get_prioritized_leads_db(
     oldest_calls_query = (
         select(Lead)
         .join(last_call_subquery, Lead.id == last_call_subquery.c.lead_id)
-        .where(Lead.branch_id == gym_id)
+        .where(Lead.branch_id == branch_id)
     )
     
     if qualification:

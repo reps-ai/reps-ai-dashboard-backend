@@ -14,6 +14,7 @@ class AISettings(Base):
     __tablename__ = "ai_settings"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
     branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False, unique=True)
     personality = Column(String(100), nullable=False)
     agent_name = Column(String(100), nullable=False)
@@ -25,12 +26,14 @@ class AISettings(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
     
     # Relationships
+    gym = relationship("Gym", back_populates="ai_settings")
     branch = relationship("Branch", back_populates="ai_settings")
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
             "id": self.id,
+            "gym_id": self.gym_id,
             "branch_id": self.branch_id,
             "personality": self.personality,
             "agent_name": self.agent_name,
