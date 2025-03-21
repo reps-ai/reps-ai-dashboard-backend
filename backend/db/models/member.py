@@ -2,7 +2,8 @@
 Member model for tracking converted leads who became gym members.
 """
 from sqlalchemy import Column, String, DateTime, ForeignKey
-from sqlalchemy.sql import func
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 from sqlalchemy.dialects.postgresql import UUID
@@ -16,14 +17,14 @@ class Member(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
-    lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
+    lead_id = Column(String(36), ForeignKey("leads.id"), nullable=True)
     branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
     membership_start_date = Column(DateTime, nullable=False)
     membership_type = Column(String(100), nullable=False)
     membership_status = Column(String(50), nullable=False)  # active, inactive, cancelled, etc.
     payment_method = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
     # Relationships
     gym = relationship("Gym", back_populates="members")

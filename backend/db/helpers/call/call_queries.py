@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy import select, and_, or_, func, desc, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends
 
 from ...models.call.call_log import CallLog
 from ...models.lead import Lead
@@ -12,11 +13,13 @@ from ...models.campaign.follow_up_campaign import FollowUpCampaign
 from ...models.call.follow_up_call import FollowUpCall
 from ...models.user import User
 from ...models.gym.branch import Branch
+from ...models.gym.gym import Gym
 from ....utils.logging.logger import get_logger
+
 
 logger = get_logger(__name__)
 
-async def get_call_with_related_data(session: AsyncSession, call_id: str) -> Optional[Dict[str, Any]]:
+async def get_call_with_related_data(call_id: str, session: AsyncSession) -> Optional[Dict[str, Any]]:
     """
     Get a call with all related data.
     
@@ -61,6 +64,27 @@ async def get_call_with_related_data(session: AsyncSession, call_id: str) -> Opt
             call_dict["campaign"] = {
                 "id": campaign.id,
                 "name": campaign.name
+            }
+
+    # Get branch and gym information if applicable
+    if call.branch_id:
+        branch_query = select(Branch).where(Branch.id == call.branch_id)
+        branch_result = await session.execute(branch_query)
+        branch = branch_result.scalar_one_or_none()
+        if branch:
+            call_dict["branch"] = {
+                "id": branch.id,
+                "name": branch.name
+            }
+    
+    if call.gym_id:
+        gym_query = select(Gym).where(Gym.id == call.gym_id)
+        gym_result = await session.execute(gym_query)
+        gym = gym_result.scalar_one_or_none()
+        if gym:
+            call_dict["gym"] = {
+                "id": gym.id,
+                "name": gym.name
             }
     
     return call_dict

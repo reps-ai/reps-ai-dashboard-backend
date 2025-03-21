@@ -4,6 +4,8 @@ Branch model for storing gym branch information.
 from sqlalchemy import Column, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from uuid import uuid4
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -21,8 +23,8 @@ class Branch(Base):
     phone = Column(String(20), nullable=True)
     email = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
     # Relationships
     gym = relationship("Gym", back_populates="branches")
@@ -36,6 +38,9 @@ class Branch(Base):
     call_settings = relationship("CallSettings", back_populates="branch", uselist=False)
     knowledge_base = relationship("KnowledgeBase", back_populates="branch")
     users = relationship("User", secondary="user_branch", back_populates="branches")
+    call_logs = relationship("CallLog", back_populates="branch")
+    follow_up_calls = relationship("FollowUpCall", back_populates="branch")
+    
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
