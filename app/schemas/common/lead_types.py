@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel, Field, validator
-from typing import Optional
+from typing import Optional, List
 
 class LeadStatus(str, Enum):
     NEW = "new"
@@ -18,16 +18,21 @@ class LeadSource(str, Enum):
     OTHER = "other"
 
 class Tag(BaseModel):
-    id: str = Field(..., description="Unique identifier for the tag")
-    name: str = Field(..., description="Name of the tag")
+    id: str = Field(..., min_length=1, description="Unique identifier for the tag")
+    name: str = Field(..., min_length=1, description="Name of the tag")
     color: str = Field(..., description="Color code for the tag (e.g., #RRGGBB)")
     
     @validator('color')
     def validate_color(cls, v):
-        if not v.startswith('#') or len(v) != 7:
-            raise ValueError('Color must be a valid hex color code (e.g., #RRGGBB)')
+        # Simplified color validation for robust testing
+        if not v.startswith('#'):
+            raise ValueError('Color must start with #')
         try:
-            int(v[1:], 16)
+            # Try to parse the hex value
+            if len(v) == 7:  # #RRGGBB format
+                int(v[1:], 16)
+            else:
+                raise ValueError('Color must be in #RRGGBB format')
         except ValueError:
             raise ValueError('Color must be a valid hex color code (e.g., #RRGGBB)')
         return v
@@ -41,10 +46,10 @@ class Tag(BaseModel):
             }
         }
 
-class AssignedTo(BaseModel):
-    id: str = Field(..., description="Unique identifier for the staff member")
-    first_name: str = Field(..., description="First name of the staff member")
-    last_name: str = Field(..., description="Last name of the staff member")
+class AssignedStaff(BaseModel):
+    id: str = Field(..., min_length=1, description="Unique identifier for the staff member")
+    first_name: str = Field(..., min_length=1, description="First name of the staff member")
+    last_name: str = Field(..., min_length=1, description="Last name of the staff member")
     
     class Config:
         schema_extra = {

@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field, validator, EmailStr
 from app.schemas.leads.base import LeadBase
-from app.schemas.common.lead_types import Tag, AssignedTo
+from app.schemas.common.lead_types import Tag, AssignedStaff
 from app.schemas.common.activity import Call, Appointment
 
 class LeadResponse(LeadBase):
@@ -91,7 +91,7 @@ class LeadResponse(LeadBase):
         }
 
 class LeadDetailResponse(LeadResponse):
-    assigned_to: Optional[AssignedTo] = Field(
+    assigned_to: Optional[AssignedStaff] = Field(
         None, 
         description="Staff member assigned to this lead"
     )
