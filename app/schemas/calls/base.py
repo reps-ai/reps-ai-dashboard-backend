@@ -1,17 +1,29 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, constr
 from typing import Optional
 from datetime import datetime
 from app.schemas.common.call_types import CallDirection, CallStatus, CallOutcome
 
 class CallBase(BaseModel):
-    lead_id: str = Field(..., description="ID of the lead associated with this call")
+    lead_id: constr(min_length=1) = Field(
+        ..., 
+        description="ID of the lead associated with this call",
+        example="lead-123"
+    )
     direction: str = Field(
         ..., 
         description="Direction of the call (inbound/outbound)",
         example="outbound"
     )
-    notes: Optional[str] = Field(None, description="Additional notes about the call")
-    campaign_id: Optional[str] = Field(None, description="ID of the campaign this call is part of")
+    notes: Optional[str] = Field(
+        None, 
+        description="Additional notes about the call",
+        example="Customer was interested in membership options"
+    )
+    campaign_id: Optional[constr(min_length=1)] = Field(
+        None, 
+        description="ID of the campaign this call is part of",
+        example="campaign-456"
+    )
     
     @validator('direction')
     def validate_direction(cls, v):
@@ -22,11 +34,19 @@ class CallBase(BaseModel):
     
     class Config:
         use_enum_values = True
+        schema_extra = {
+            "example": {
+                "lead_id": "lead-123",
+                "direction": "outbound",
+                "notes": "Customer was interested in membership options",
+                "campaign_id": "campaign-456"
+            }
+        }
 
 class CallCreate(CallBase):
     scheduled_time: Optional[str] = Field(
         None, 
-        description="Scheduled time for the call in ISO format", 
+        description="Scheduled time for the call in ISO format (UTC)", 
         example="2025-03-23T10:30:00Z"
     )
     
@@ -37,17 +57,36 @@ class CallCreate(CallBase):
                 # Parse the datetime to validate format
                 datetime.fromisoformat(v.replace('Z', '+00:00'))
             except ValueError:
-                raise ValueError('scheduled_time must be a valid ISO datetime format')
+                raise ValueError('scheduled_time must be a valid ISO datetime format (e.g., 2025-03-23T10:30:00Z)')
         return v
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "lead_id": "lead-123",
+                "direction": "outbound",
+                "notes": "Follow up on previous inquiry",
+                "campaign_id": "campaign-456",
+                "scheduled_time": "2025-03-23T10:30:00Z"
+            }
+        }
 
 class CallUpdate(BaseModel):
     outcome: Optional[str] = Field(
         None, 
-        description="Outcome of the call",
+        description="Outcome of the call (appointment_booked, callback_requested, not_interested, etc.)",
         example="appointment_booked"
     )
-    notes: Optional[str] = Field(None, description="Additional notes about the call")
-    summary: Optional[str] = Field(None, description="Summary of the call conversation")
+    notes: Optional[str] = Field(
+        None, 
+        description="Additional notes about the call",
+        example="Customer booked a consultation appointment"
+    )
+    summary: Optional[str] = Field(
+        None, 
+        description="Summary of the call conversation",
+        example="Discussed membership options and scheduled a visit"
+    )
     
     @validator('outcome')
     def validate_outcome(cls, v):
@@ -60,19 +99,32 @@ class CallUpdate(BaseModel):
     
     class Config:
         use_enum_values = True
+        schema_extra = {
+            "example": {
+                "outcome": "appointment_booked",
+                "notes": "Customer booked a consultation appointment",
+                "summary": "Discussed membership options and scheduled a visit"
+            }
+        }
 
 class CallNoteCreate(BaseModel):
-    content: str = Field(
+    content: constr(min_length=1) = Field(
         ..., 
-        min_length=1, 
         description="Content of the note",
         example="Discussed membership options"
     )
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "content": "Discussed membership options and explained pricing tiers."
+            }
+        }
 
 class CallOutcomeUpdate(BaseModel):
     outcome: str = Field(
         ..., 
-        description="New outcome for the call",
+        description="New outcome for the call (appointment_booked, callback_requested, not_interested, etc.)",
         example="appointment_booked"
     )
     
@@ -85,3 +137,8 @@ class CallOutcomeUpdate(BaseModel):
     
     class Config:
         use_enum_values = True
+        schema_extra = {
+            "example": {
+                "outcome": "appointment_booked"
+            }
+        }

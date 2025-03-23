@@ -1,34 +1,34 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, constr
 from typing import Optional
 from datetime import datetime
 from app.schemas.common.appointment_types import AppointmentType, AppointmentStatus
 
 class AppointmentBase(BaseModel):
-    lead_id: str = Field(..., description="ID of the lead associated with this appointment")
+    lead_id: constr(min_length=1) = Field(..., description="ID of the lead associated with this appointment", example="lead-123")
     type: str = Field(
         ..., 
-        description="Type of appointment",
+        description="Type of appointment (consultation, assessment, training, tour, follow_up, other)",
         example="consultation"
     )
     date: str = Field(
         ..., 
-        description="Date and time of the appointment in ISO format",
+        description="Date and time of the appointment in ISO format (UTC)",
         example="2025-03-25T14:00:00Z"
     )
     duration: int = Field(
         ..., 
         ge=15, 
         le=180, 
-        description="Duration of the appointment in minutes",
+        description="Duration of the appointment in minutes (15-180)",
         example=60
     )
     status: str = Field(
         ..., 
-        description="Current status of the appointment",
+        description="Current status of the appointment (scheduled, confirmed, completed, canceled, no_show, rescheduled)",
         example="scheduled"
     )
-    branch_id: str = Field(..., description="ID of the branch where the appointment is scheduled")
-    notes: Optional[str] = Field(None, description="Additional notes about the appointment")
+    branch_id: constr(min_length=1) = Field(..., description="ID of the branch where the appointment is scheduled", example="branch-123")
+    notes: Optional[str] = Field(None, description="Additional notes about the appointment", example="First consultation for membership options")
     
     @validator('date')
     def validate_date(cls, v):
@@ -36,7 +36,7 @@ class AppointmentBase(BaseModel):
             # Parse the datetime to validate format
             datetime.fromisoformat(v.replace('Z', '+00:00'))
         except ValueError:
-            raise ValueError('date must be a valid ISO datetime format')
+            raise ValueError('date must be a valid ISO datetime format (e.g., 2025-03-25T14:00:00Z)')
         return v
     
     @validator('type')
@@ -55,15 +55,26 @@ class AppointmentBase(BaseModel):
     
     class Config:
         use_enum_values = True
+        schema_extra = {
+            "example": {
+                "lead_id": "lead-123",
+                "type": "consultation",
+                "date": "2025-03-25T14:00:00Z",
+                "duration": 60,
+                "status": "scheduled",
+                "branch_id": "branch-123",
+                "notes": "First consultation for membership options"
+            }
+        }
 
 class AppointmentCreate(AppointmentBase):
     pass
 
 class AppointmentUpdate(BaseModel):
-    type: Optional[str] = Field(None, description="Type of appointment")
-    date: Optional[str] = Field(None, description="Date and time of the appointment in ISO format")
-    duration: Optional[int] = Field(None, ge=15, le=180, description="Duration of the appointment in minutes")
-    status: Optional[str] = Field(None, description="Current status of the appointment")
+    type: Optional[str] = Field(None, description="Type of appointment (consultation, assessment, training, tour, follow_up, other)")
+    date: Optional[str] = Field(None, description="Date and time of the appointment in ISO format (UTC)")
+    duration: Optional[int] = Field(None, ge=15, le=180, description="Duration of the appointment in minutes (15-180)")
+    status: Optional[str] = Field(None, description="Current status of the appointment (scheduled, confirmed, completed, canceled, no_show, rescheduled)")
     branch_id: Optional[str] = Field(None, description="ID of the branch where the appointment is scheduled")
     notes: Optional[str] = Field(None, description="Additional notes about the appointment")
     
@@ -74,11 +85,20 @@ class AppointmentUpdate(BaseModel):
     
     class Config:
         use_enum_values = True
+        schema_extra = {
+            "example": {
+                "type": "consultation",
+                "date": "2025-03-25T14:00:00Z",
+                "duration": 60,
+                "status": "confirmed",
+                "notes": "Customer confirmed availability"
+            }
+        }
 
 class AppointmentStatusUpdate(BaseModel):
     status: str = Field(
         ..., 
-        description="New status for the appointment",
+        description="New status for the appointment (scheduled, confirmed, completed, canceled, no_show, rescheduled)",
         example="completed"
     )
     
@@ -91,3 +111,8 @@ class AppointmentStatusUpdate(BaseModel):
     
     class Config:
         use_enum_values = True
+        schema_extra = {
+            "example": {
+                "status": "completed"
+            }
+        }
