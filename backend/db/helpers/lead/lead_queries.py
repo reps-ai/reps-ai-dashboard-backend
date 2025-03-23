@@ -3,14 +3,17 @@ Database helper functions for lead-related operations.
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_, or_, func, desc, update, insert
+from sqlalchemy import select, and_, or_, func, desc, update, insert, delete, join
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from ...models.lead import Lead
 from ...models.lead.lead_tag import lead_tag
 from ...models.lead.tag import Tag
 from ...models.call.call_log import CallLog
 from ...models.campaign.follow_up_campaign import FollowUpCampaign
+from ...models.member import Member
+from ...models.call.follow_up_call import FollowUpCall
 from ....utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
@@ -26,10 +29,10 @@ async def get_lead_with_related_data(session: AsyncSession, lead_id: str) -> Opt
     Returns:
         Lead data with related information or None if not found
     """
-    # Get lead
+    # Get lead with unique() for 1.4 compatibility
     lead_query = select(Lead).where(Lead.id == lead_id)
     lead_result = await session.execute(lead_query)
-    lead = lead_result.scalar_one_or_none()
+    lead = lead_result.unique().scalar_one_or_none()
     
     if not lead:
         return None
@@ -62,6 +65,261 @@ async def get_lead_with_related_data(session: AsyncSession, lead_id: str) -> Opt
     lead_dict["last_call"] = last_call.to_dict() if last_call else None
     
     return lead_dict
+
+async def create_lead_db(
+    session: AsyncSession,
+    lead_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Create a new lead.
+    
+    Args:
+        session: Database session
+        lead_data: Dictionary containing lead details
+        
+    Returns:
+        Created lead data
+    """
+    logger.info("Creating new lead record")
+    
+    lead = Lead(**lead_data)
+    session.add(lead)
+    await session.commit()
+    await session.refresh(lead)
+    
+    return await get_lead_with_related_data(session, lead.id)
+
+async def update_lead_db(
+    session: AsyncSession,
+    lead_id: str,
+    lead_data: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """
+    Update lead record.
+    
+    Args:
+        session: Database session
+        lead_id: Lead ID
+        lead_data: Dictionary containing updated lead details
+        
+    Returns:
+        Updated lead data if successful, None if not found
+    """
+    logger.info(f"Updating lead with ID: {lead_id}")
+    
+    query = (
+        update(Lead)
+        .where(Lead.id == lead_id)
+        .values(**lead_data)
+    )
+    result = await session.execute(query)
+    await session.commit()
+    
+    if result.rowcount == 0:
+        return None
+    
+    return await get_lead_with_related_data(session, lead_id)
+
+async def delete_lead_db(
+    session: AsyncSession,
+    lead_id: str
+) -> bool:
+    """
+    Delete a lead record with cascade.
+    
+    Args:
+        session: Database session
+        lead_id: Lead ID
+        
+    Returns:
+        True if deleted successfully, False if not found
+    """
+    logger.info(f"Deleting lead with ID: {lead_id}")
+    
+    try:
+        # First delete related records
+        # Delete call logs
+        await session.execute(
+            delete(CallLog)
+            .where(CallLog.lead_id == lead_id)
+            .execution_options(synchronize_session="fetch")
+        )
+        
+        # Delete follow-up calls
+        await session.execute(
+            delete(FollowUpCall)
+            .where(FollowUpCall.lead_id == lead_id)
+            .execution_options(synchronize_session="fetch")
+        )
+        
+        # Delete tags associations
+        await session.execute(
+            delete(lead_tag)
+            .where(lead_tag.c.lead_id == lead_id)
+            .execution_options(synchronize_session="fetch")
+        )
+        
+        # Delete follow-up campaigns
+        await session.execute(
+            delete(FollowUpCampaign)
+            .where(FollowUpCampaign.lead_id == lead_id)
+            .execution_options(synchronize_session="fetch")
+        )
+        
+        # Finally delete the lead
+        query = (
+            delete(Lead)
+            .where(Lead.id == lead_id)
+            .execution_options(synchronize_session="fetch")
+        )
+        result = await session.execute(query)
+        await session.commit()
+        
+        return result.rowcount > 0
+        
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Error deleting lead {lead_id}: {str(e)}")
+        raise
+
+async def get_converted_leads_db(
+    session: AsyncSession,
+    gym_id: str,
+    page: int = 1,
+    page_size: int = 50
+) -> Dict[str, Any]:
+    """
+    Get leads that have been converted to members with pagination.
+    
+    Args:
+        session: Database session
+        gym_id: Gym ID
+        page: Page number
+        page_size: Page size
+        
+    Returns:
+        Dictionary containing converted leads and pagination info
+    """
+    # Query leads that have associated members
+    base_query = (
+        select(Lead)
+        .join(Member, Lead.id == Member.lead_id)
+        .outerjoin(Lead.tags)  # Explicit joins for relationships
+        .where(Lead.gym_id == gym_id)
+        .group_by(Lead.id)
+    )
+    
+    # Get total count
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total = await session.execute(count_query)
+    total_converted = total.scalar_one()
+    
+    # Get paginated results
+    offset = (page - 1) * page_size
+    query = base_query.order_by(desc(Lead.updated_at)).offset(offset).limit(page_size)
+    result = await session.execute(query)
+    leads = result.scalars().all()
+    
+    # Get full lead data with member information
+    converted_data = []
+    for lead in leads:
+        lead_data = await get_lead_with_related_data(session, lead.id)
+        # Add member information
+        member_query = select(Member).where(Member.lead_id == lead.id)
+        member_result = await session.execute(member_query)
+        member = member_result.scalar_one_or_none()
+        if member:
+            lead_data["member"] = member.to_dict()
+        converted_data.append(lead_data)
+    
+    return {
+        "converted_leads": converted_data,
+        "pagination": {
+            "total": total_converted,
+            "page": page,
+            "page_size": page_size,
+            "pages": (total_converted + page_size - 1) // page_size
+        }
+    }
+
+async def get_lead_conversion_details_db(
+    session: AsyncSession,
+    lead_id: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Get conversion details for a lead.
+    
+    Args:
+        session: Database session
+        lead_id: Lead ID
+        
+    Returns:
+        Dictionary containing lead and member details if converted,
+        lead details only if not converted, None if lead not found
+    """
+    # Get lead data
+    lead_data = await get_lead_with_related_data(session, lead_id)
+    if not lead_data:
+        return None
+    
+    # Check for member conversion
+    member_query = select(Member).where(Member.lead_id == lead_id)
+    member_result = await session.execute(member_query)
+    member = member_result.scalar_one_or_none()
+    
+    if member:
+        lead_data["converted"] = True
+        lead_data["member"] = member.to_dict()
+    else:
+        lead_data["converted"] = False
+    
+    return lead_data
+
+async def get_leads_by_assigned_user_db(
+    session: AsyncSession,
+    user_id: str,
+    page: int = 1,
+    page_size: int = 50
+) -> Dict[str, Any]:
+    """
+    Get all leads assigned to a specific user with pagination.
+    
+    Args:
+        session: Database session
+        user_id: User ID
+        page: Page number
+        page_size: Page size
+        
+    Returns:
+        Dictionary containing assigned leads and pagination info
+    """
+    base_query = select(Lead).where(Lead.assigned_to_user_id == user_id)
+    
+    # Get total count
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total = await session.execute(count_query)
+    total_leads = total.scalar_one()
+    
+    # Get paginated results
+    offset = (page - 1) * page_size
+    query = base_query.order_by(desc(Lead.updated_at)).offset(offset).limit(page_size)
+    result = await session.execute(query)
+    leads = result.scalars().all()
+    
+    # Get full lead data
+    leads_data = []
+    for lead in leads:
+        leads_data.append(await get_lead_with_related_data(session, lead.id))
+    
+    return {
+        "leads": leads_data,
+        "pagination": {
+            "total": total_leads,
+            "page": page,
+            "page_size": page_size,
+            "pages": (total_leads + page_size - 1) // page_size
+        }
+    }
 
 def build_lead_filters(base_query, filters: Dict[str, Any]):
     """
@@ -164,7 +422,14 @@ async def get_leads_by_gym_with_filters(
         Dictionary containing leads and pagination info
     """
     # Start with base query
-    base_query = select(Lead).where(Lead.branch_id == branch_id)
+    base_query = (
+        select(Lead)
+        .outerjoin(Lead.tags)  # Explicit join for relationships
+        .outerjoin(Lead.call_logs)
+        .outerjoin(Lead.appointments)
+        .where(Lead.branch_id == branch_id)
+        .group_by(Lead.id)
+    )
     
     # Apply filters
     if filters:
@@ -457,4 +722,4 @@ async def get_leads_for_retry_db(
     retry_result = await session.execute(retry_query)
     retry_leads = retry_result.scalars().all()
     
-    return [await get_lead_with_related_data(session, lead.id) for lead in retry_leads] 
+    return [await get_lead_with_related_data(session, lead.id) for lead in retry_leads]
