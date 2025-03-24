@@ -47,7 +47,7 @@ async def get_call_with_related_data(session: AsyncSession, call_id: str) -> Opt
             .where(Lead.id == call.lead_id)
         )
         lead_result = await session.execute(lead_query)
-        lead = result.unique().scalar_one_or_none()
+        lead = lead_result.unique().scalar_one_or_none()
         if lead:
             call_dict["lead"] = {
                 "id": lead.id,

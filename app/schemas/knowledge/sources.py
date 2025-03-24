@@ -1,24 +1,24 @@
-from pydantic import BaseModel, Field, validator, constr, HttpUrl, AnyHttpUrl
-from typing import List, Optional
+from pydantic import BaseModel, Field, validator, constr, HttpUrl, AnyHttpUrl, Annotated
+from typing import List, Optional, Annotated
 from datetime import datetime
 from app.schemas.common.knowledge_types import SourceType, ImportStatus
 
 class SourceBase(BaseModel):
-    name: constr(min_length=1) = Field(
-        ..., 
+    name: Annotated[str, Field(
+        min_length=1,
         description="Name of the source",
         example="Gym Policies"
-    )
+    )]
     type: str = Field(
         ..., 
         description="Type of the source (pdf, website, doc, manual, other)",
         example="pdf"
     )
-    category: constr(min_length=1) = Field(
-        ..., 
+    category: Annotated[str, Field(
+        min_length=1,
         description="Category of the source",
         example="gym"
-    )
+    )]
     url: Optional[str] = Field(
         None, 
         description="URL of the source, if applicable",
@@ -77,11 +77,11 @@ class SourceCreate(SourceBase):
         }
 
 class SourceResponse(SourceBase):
-    id: constr(min_length=1) = Field(
-        ..., 
+    id: Annotated[str, Field(
+        min_length=1,
         description="Unique identifier for the source",
         example="source-123"
-    )
+    )]
     file_path: Optional[str] = Field(
         None, 
         description="File path of the source, if applicable",
