@@ -2,7 +2,7 @@
 Interface for the Retell Integration Service.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 class RetellIntegration(ABC):
     """
@@ -36,58 +36,6 @@ class RetellIntegration(ABC):
             
         Returns:
             Dictionary containing call details
-        """
-        pass
-    
-    @abstractmethod
-    async def get_call_status(self, call_id: str) -> Dict[str, Any]:
-        """
-        Get the status of a call.
-        
-        Args:
-            call_id: ID of the call
-            
-        Returns:
-            Dictionary containing call status
-        """
-        pass
-    
-    @abstractmethod
-    async def end_call(self, call_id: str) -> Dict[str, Any]:
-        """
-        End a call.
-        
-        Args:
-            call_id: ID of the call
-            
-        Returns:
-            Dictionary containing call result
-        """
-        pass
-    
-    @abstractmethod
-    async def get_call_recording(self, call_id: str) -> Dict[str, Any]:
-        """
-        Get the recording for a call.
-        
-        Args:
-            call_id: ID of the call
-            
-        Returns:
-            Dictionary containing recording information
-        """
-        pass
-    
-    @abstractmethod
-    async def get_call_transcript(self, call_id: str) -> List[Dict[str, Any]]:
-        """
-        Get the transcript for a call.
-        
-        Args:
-            call_id: ID of the call
-            
-        Returns:
-            List of transcript entries
         """
         pass
     

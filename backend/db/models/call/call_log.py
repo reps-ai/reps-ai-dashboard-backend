@@ -1,7 +1,7 @@
 """
 CallLog model for tracking calls made to leads.
 """
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
@@ -33,6 +33,8 @@ class CallLog(Base):
     summary = Column(Text, nullable=True)
     sentiment = Column(String(50), nullable=True)  # positive, negative, neutral
     campaign_id = Column(String(36), ForeignKey("follow_up_campaigns.id"), nullable=True)
+    external_call_id = Column(String(255), nullable=True)  # ID from external calling service (e.g., Retell)
+    external_data = Column(JSON, nullable=True)  # Raw data from external calling service
     
     # Relationships
     lead = relationship("Lead", back_populates="call_logs")
@@ -60,5 +62,7 @@ class CallLog(Base):
             "transcript": self.transcript,
             "summary": self.summary,
             "sentiment": self.sentiment,
-            "campaign_id": self.campaign_id
+            "campaign_id": self.campaign_id,
+            "external_call_id": self.external_call_id,
+            "external_data": self.external_data
         }

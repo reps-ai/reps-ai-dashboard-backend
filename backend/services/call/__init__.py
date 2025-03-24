@@ -1,8 +1,8 @@
 """
-Call service module.
+Call Service package.
 """
 from .interface import CallService
+from .factory import create_call_service
 from .implementation import DefaultCallService
-from .factory import CallServiceFactory
 
-__all__ = ['CallService', 'DefaultCallService', 'CallServiceFactory'] 
+__all__ = ["CallService", "create_call_service", "DefaultCallService"] 
