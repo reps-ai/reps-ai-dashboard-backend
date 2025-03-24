@@ -51,4 +51,17 @@ class FollowUpCampaign(Base):
             "campaign_status": self.campaign_status,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+# Import dependent models to ensure registration:
+from backend.db.models.call.call_log import CallLog
+from backend.db.models.lead.lead import Lead
+from backend.db.models.call.follow_up_call import FollowUpCall
+from backend.db.models.gym.gym import Gym
+from backend.db.models.gym.branch import Branch
+
+FollowUpCampaign.call_logs = relationship("CallLog", back_populates="campaign")
+FollowUpCampaign.lead = relationship("Lead", back_populates="follow_up_campaigns")
+FollowUpCampaign.follow_up_calls = relationship("FollowUpCall", back_populates="campaign")
+FollowUpCampaign.gym = relationship("Gym", back_populates="follow_up_campaign")
+FollowUpCampaign.branch = relationship("Branch", back_populates="follow_up_campaigns")

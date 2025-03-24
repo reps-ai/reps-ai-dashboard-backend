@@ -26,11 +26,6 @@ class Member(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    gym = relationship("Gym", back_populates="members")
-    lead = relationship("Lead", back_populates="member")
-    branch = relationship("Branch", back_populates="members")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -44,4 +39,12 @@ class Member(Base):
             "payment_method": self.payment_method,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.gym.gym import Gym
+from backend.db.models.lead.lead import Lead
+from backend.db.models.gym.branch import Branch
+
+Member.gym = relationship("Gym", back_populates="members")
+Member.lead = relationship("Lead", back_populates="member")
+Member.branch = relationship("Branch", back_populates="members")

@@ -27,10 +27,6 @@ class GymSettings(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    branch = relationship("Branch", back_populates="gym_settings")
-    gym_id = relationship("Gym", back_populates="gym_settings")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -46,4 +42,10 @@ class GymSettings(Base):
             "description": self.description,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.gym.branch import Branch
+from backend.db.models.gym.gym import Gym
+
+GymSettings.branch = relationship("Branch", back_populates="gym_settings")
+GymSettings.gym = relationship("Gym", back_populates="gym_settings")

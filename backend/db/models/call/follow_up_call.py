@@ -34,12 +34,6 @@ class FollowUpCall(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    lead = relationship("Lead", back_populates="follow_up_calls")
-    campaign = relationship("FollowUpCampaign", back_populates="follow_up_calls")
-    branch = relationship("Branch", back_populates="follow_up_calls")
-    gym = relationship("Gym", back_populates="follow_up_calls")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -61,4 +55,14 @@ class FollowUpCall(Base):
             "sentiment": self.sentiment,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.lead.lead import Lead
+from backend.db.models.campaign.follow_up_campaign import FollowUpCampaign
+from backend.db.models.gym.branch import Branch
+from backend.db.models.gym.gym import Gym
+
+FollowUpCall.lead = relationship("Lead", back_populates="follow_up_calls")
+FollowUpCall.campaign = relationship("FollowUpCampaign", back_populates="follow_up_calls")
+FollowUpCall.branch = relationship("Branch", back_populates="follow_up_calls")
+FollowUpCall.gym = relationship("Gym", back_populates="follow_up_calls")

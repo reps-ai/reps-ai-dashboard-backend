@@ -24,10 +24,6 @@ class KnowledgeBase(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    branch = relationship("Branch", back_populates="knowledge_base")
-    gym = relationship("Gym", back_populates="knowledge_base")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -40,4 +36,10 @@ class KnowledgeBase(Base):
             "tags": self.tags,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.gym.branch import Branch
+from backend.db.models.gym.gym import Gym
+
+KnowledgeBase.branch = relationship("Branch", back_populates="knowledge_base")
+KnowledgeBase.gym = relationship("Gym", back_populates="knowledge_base")

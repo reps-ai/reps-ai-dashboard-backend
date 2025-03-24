@@ -20,9 +20,6 @@ class Tag(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    leads = relationship("Lead", secondary="lead_tag", back_populates="tags")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -31,4 +28,7 @@ class Tag(Base):
             "color": self.color,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.lead.lead import Lead
+Tag.leads = relationship("Lead", secondary="lead_tag", back_populates="tags")

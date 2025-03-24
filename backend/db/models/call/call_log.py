@@ -33,15 +33,8 @@ class CallLog(Base):
     summary = Column(Text, nullable=True)
     sentiment = Column(String(50), nullable=True)  # positive, negative, neutral
     campaign_id = Column(String(36), ForeignKey("follow_up_campaigns.id"), nullable=True)
-    external_call_id = Column(String(255), nullable=True)  # ID from external calling service (e.g., Retell)
     external_data = Column(JSON, nullable=True)  # Raw data from external calling service
     
-    # Relationships
-    lead = relationship("Lead", back_populates="call_logs")
-    branch = relationship("Branch", back_populates="call_logs")
-    gym = relationship("Gym", back_populates="call_logs")
-    campaign = relationship("FollowUpCampaign", back_populates="call_logs")
-
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -63,6 +56,15 @@ class CallLog(Base):
             "summary": self.summary,
             "sentiment": self.sentiment,
             "campaign_id": self.campaign_id,
-            "external_call_id": self.external_call_id,
             "external_data": self.external_data
         }
+
+from backend.db.models.lead.lead import Lead
+from backend.db.models.gym.branch import Branch
+from backend.db.models.gym.gym import Gym
+from backend.db.models.campaign.follow_up_campaign import FollowUpCampaign
+
+CallLog.lead = relationship("Lead", back_populates="call_logs")
+CallLog.branch = relationship("Branch", back_populates="call_logs")
+CallLog.gym = relationship("Gym", back_populates="call_logs")
+CallLog.campaign = relationship("FollowUpCampaign", back_populates="call_logs")

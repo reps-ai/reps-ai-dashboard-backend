@@ -13,4 +13,4 @@ lead_tag = Table(
     Column("lead_id", String(36), ForeignKey("leads.id"), primary_key=True),
     Column("tag_id", String(36), ForeignKey("tags.id"), primary_key=True),
     Column("created_at", DateTime, default=func.now(), nullable=False)
-) 
+)

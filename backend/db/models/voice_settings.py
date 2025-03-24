@@ -24,10 +24,6 @@ class VoiceSettings(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    gym = relationship("Gym", back_populates="voice_settings")
-    branch = relationship("Branch", back_populates="voice_settings")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -40,4 +36,10 @@ class VoiceSettings(Base):
             "voice_sample_url": self.voice_sample_url,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.gym.gym import Gym
+from backend.db.models.gym.branch import Branch
+
+VoiceSettings.gym = relationship("Gym", back_populates="voice_settings")
+VoiceSettings.branch = relationship("Branch", back_populates="voice_settings")

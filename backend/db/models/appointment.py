@@ -31,13 +31,6 @@ class Appointment(Base):
     reminder_sent = Column(Boolean, default=False, nullable=False)
     employee_name = Column(String(255), nullable=True)  # In case employee is not a system user
     
-    # Relationships
-    gym = relationship("Gym", back_populates="appointments")
-    lead = relationship("Lead", back_populates="appointments")
-    branch = relationship("Branch", back_populates="appointments")
-    employee = relationship("User", foreign_keys=[employee_user_id], back_populates="appointments_as_employee")
-    created_by = relationship("User", foreign_keys=[created_by_user_id], back_populates="appointments_created")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -56,4 +49,16 @@ class Appointment(Base):
             "created_by_user_id": self.created_by_user_id,
             "reminder_sent": self.reminder_sent,
             "employee_name": self.employee_name
-        } 
+        }
+
+from backend.db.models.gym.gym import Gym
+from backend.db.models.lead.lead import Lead
+from backend.db.models.gym.branch import Branch
+from backend.db.models.user import User
+
+# Define relationships after the class:
+Appointment.gym = relationship("Gym", back_populates="appointments")
+Appointment.lead = relationship("Lead", back_populates="appointments")
+Appointment.branch = relationship("Branch", back_populates="appointments")
+Appointment.employee = relationship("User", foreign_keys=[Appointment.employee_user_id], back_populates="appointments_as_employee")
+Appointment.created_by = relationship("User", foreign_keys=[Appointment.created_by_user_id], back_populates="appointments_created")
