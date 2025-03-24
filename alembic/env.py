@@ -6,11 +6,37 @@ from backend.db.config import settings
 from backend.db.base import Base
 
 from alembic import context
+import re
+from urllib.parse import urlparse, parse_qs
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-config.set_main_option("sqlalchemy.url",settings.database_url_with_ssl)
+
+# Parse the DATABASE_URL to handle SSL correctly for Alembic (which needs a synchronous connection)
+db_url = settings.DATABASE_URL
+
+# 1. Convert from asyncpg to psycopg2 if needed
+if '+asyncpg' in db_url:
+    db_url = db_url.replace('+asyncpg', '')
+
+# 2. Handle SSL parameters
+parsed_url = urlparse(db_url)
+query_params = parse_qs(parsed_url.query)
+
+# Create a clean URL without SSL parameters
+clean_url_parts = list(parsed_url)
+clean_url_parts[4] = '&'.join([
+    f"{k}={v[0]}" for k, v in query_params.items() 
+    if k not in ['sslmode', 'ssl']
+])
+
+# Build the clean URL
+clean_url = parsed_url._replace(query=clean_url_parts[4]).geturl()
+if clean_url.endswith('?'):
+    clean_url = clean_url[:-1]  # Remove trailing ? if there are no query params left
+
+config.set_main_option("sqlalchemy.url", clean_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -82,10 +108,22 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # Create a synchronous engine with appropriate settings
+    # Get the base configuration but possibly override with SSL settings
+    section = config.get_section(config.config_ini_section, {})
+    
+    # Check if we're connecting to Neon or another service requiring SSL
+    alembic_url = config.get_main_option("sqlalchemy.url")
+    connect_args = {}
+    if 'neon.tech' in alembic_url:
+        # For psycopg2, use sslmode instead of ssl
+        connect_args['sslmode'] = 'require'
+    
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args
     )
 
     with connectable.connect() as connection:

@@ -14,6 +14,7 @@ from ...models.call.call_log import CallLog
 from ...models.campaign.follow_up_campaign import FollowUpCampaign
 from ...models.member import Member
 from ...models.call.follow_up_call import FollowUpCall
+from ...models.gym.branch import Branch
 from ....utils.logging.logger import get_logger
 
 logger = get_logger(__name__)

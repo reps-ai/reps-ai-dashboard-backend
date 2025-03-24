@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from ..base import Base
 
+
 class Lead(Base):
     """Lead model representing potential gym members."""
     
