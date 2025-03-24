@@ -2,6 +2,7 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy.engine.url import make_url
 from backend.db.config import settings
 from backend.db.base import Base
 
@@ -64,6 +65,10 @@ def run_migrations_offline() -> None:
 
     """
     url = config.get_main_option("sqlalchemy.url")
+    # Convert to a URL object and remove the async driver indicator
+    sync_url = make_url(url).set(drivername="postgresql")
+    config.set_main_option("sqlalchemy.url", str(sync_url))
+
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -78,10 +83,15 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
+    In this scenario we need to create an Engine and associate a connection with the context.
     """
+    # Get the async URL from the config
+    url = config.get_main_option("sqlalchemy.url")
+    # Convert it to a URL object and change the driver name to synchronous "postgresql"
+    sync_url = make_url(url).set(drivername="postgresql")
+    # Update the config with the sync URL
+    config.set_main_option("sqlalchemy.url", str(sync_url))
+    
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -90,12 +100,12 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata
         )
 
         with context.begin_transaction():
             context.run_migrations()
-
 
 if context.is_offline_mode():
     run_migrations_offline()
