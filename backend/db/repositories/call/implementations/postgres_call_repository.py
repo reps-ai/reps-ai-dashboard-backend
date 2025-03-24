@@ -5,7 +5,6 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from sqlalchemy import select, and_, or_, func, desc, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from ...call.interface import CallRepository
 from ....models.call.call_log import CallLog
 from ....models.lead import Lead
