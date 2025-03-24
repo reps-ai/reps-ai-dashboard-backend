@@ -1,0 +1,1 @@
+"""Appointment-related schema definitions.""" 

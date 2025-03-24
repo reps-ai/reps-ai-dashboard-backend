@@ -1,0 +1,1 @@
+"""Common schema types shared across different modules.""" 
