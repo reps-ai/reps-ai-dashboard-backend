@@ -1,4 +1,5 @@
 /venv
+/experiment
 env
 # Python
 __pycache__/

@@ -4,6 +4,8 @@ CallLog model for tracking calls made to leads.
 from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from uuid import uuid4
 
 from ..base import Base
@@ -14,15 +16,16 @@ class CallLog(Base):
     __tablename__ = "call_logs"
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
     lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
-    agent_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)  # Null if AI call
     duration = Column(Integer, nullable=True)  # in seconds
-    call_type = Column(String(50), nullable=False)  # outbound, inbound, ai, etc.
+    call_type = Column(String(50), nullable=False)  # outbound or inbound
     human_notes = Column(Text, nullable=True)
     outcome = Column(String(50), nullable=True)  # scheduled, not_interested, callback, etc.
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-    call_status = Column(String(50), nullable=False)  # scheduled, in_progress, completed, failed, etc.
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
+    call_status = Column(String(50), nullable=False)  # completed, failed, etc.
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)
     recording_url = Column(String(255), nullable=True)
@@ -33,15 +36,17 @@ class CallLog(Base):
     
     # Relationships
     lead = relationship("Lead", back_populates="call_logs")
-    agent = relationship("User", foreign_keys=[agent_user_id], back_populates="call_logs")
+    branch = relationship("Branch", back_populates="call_logs")
+    gym = relationship("Gym", back_populates="call_logs")
     campaign = relationship("FollowUpCampaign", back_populates="call_logs")
-    
+
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
             "id": self.id,
             "lead_id": self.lead_id,
-            "agent_user_id": self.agent_user_id,
+            "branch_id": self.branch_id,
+            "gym_id": self.gym_id,
             "duration": self.duration,
             "call_type": self.call_type,
             "human_notes": self.human_notes,
@@ -56,4 +61,4 @@ class CallLog(Base):
             "summary": self.summary,
             "sentiment": self.sentiment,
             "campaign_id": self.campaign_id
-        } 
+        }

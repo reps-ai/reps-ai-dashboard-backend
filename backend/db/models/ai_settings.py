@@ -2,7 +2,8 @@
 AISettings model for storing AI-specific settings for automated calls.
 """
 from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey
-from sqlalchemy.sql import func
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 
@@ -22,8 +23,8 @@ class AISettings(Base):
     allow_interruptions = Column(Boolean, default=True, nullable=False)
     offer_human_transfer = Column(Boolean, default=True, nullable=False)
     escalation_threshold = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
     # Relationships
     gym = relationship("Gym", back_populates="ai_settings")

@@ -2,7 +2,8 @@
 VoiceSettings model for storing voice-specific settings for AI calls.
 """
 from sqlalchemy import Column, String, DateTime, ForeignKey
-from sqlalchemy.sql import func
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 
@@ -20,8 +21,8 @@ class VoiceSettings(Base):
     speaking_speed = Column(String(50), nullable=True)
     volume = Column(String(50), nullable=True)
     voice_sample_url = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
     # Relationships
     gym = relationship("Gym", back_populates="voice_settings")

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from app.dependencies import get_current_user, get_admin_user
+from ....backend.db.connections.database import get_db #imp
 
 router = APIRouter()
 
@@ -10,6 +11,8 @@ async def get_prompts(current_user = Depends(get_current_user)):
     """
     # TODO: Implement prompts retrieval logic
     return {"message": "Get prompts endpoint"}
+
+#async def get_prompts(current_user = Depends(get_current_user), session : AsyncSession = Depends(get_db)):
 
 @router.get("/prompts/{prompt_id}")
 async def get_prompt(prompt_id: str, current_user = Depends(get_current_user)):

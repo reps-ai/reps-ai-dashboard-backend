@@ -4,6 +4,8 @@ Lead model representing potential gym members.
 from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from uuid import uuid4
 
 from ..base import Base
@@ -15,6 +17,7 @@ class Lead(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
     assigned_to_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
@@ -26,8 +29,8 @@ class Lead(Base):
     interest_location = Column(String(255), nullable=True)
     last_conversation_summary = Column(Text, nullable=True)
     last_called = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     score = Column(Integer, nullable=True)
     source = Column(String(100), nullable=True)
     next_appointment_date = Column(DateTime, nullable=True)
@@ -49,6 +52,7 @@ class Lead(Base):
     
     # Relationships
     branch = relationship("Branch", back_populates="leads")
+    gym = relationship("Gym", back_populates="leads")
     assigned_to = relationship("User", foreign_keys=[assigned_to_user_id], back_populates="assigned_leads")
     call_logs = relationship("CallLog", back_populates="lead")
     appointments = relationship("Appointment", back_populates="lead")
@@ -62,6 +66,7 @@ class Lead(Base):
         return {
             "id": self.id,
             "branch_id": self.branch_id,
+            "gym_id": self.gym_id,
             "assigned_to_user_id": self.assigned_to_user_id,
             "first_name": self.first_name,
             "last_name": self.last_name,
