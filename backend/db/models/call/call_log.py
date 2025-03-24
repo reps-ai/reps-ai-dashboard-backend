@@ -33,7 +33,6 @@ class CallLog(Base):
     summary = Column(Text, nullable=True)
     sentiment = Column(String(50), nullable=True)  # positive, negative, neutral
     campaign_id = Column(String(36), ForeignKey("follow_up_campaigns.id"), nullable=True)
-    external_data = Column(JSON, nullable=True)  # Raw data from external calling service
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -55,8 +54,7 @@ class CallLog(Base):
             "transcript": self.transcript,
             "summary": self.summary,
             "sentiment": self.sentiment,
-            "campaign_id": self.campaign_id,
-            "external_data": self.external_data
+            "campaign_id": self.campaign_id
         }
 
 from backend.db.models.lead.lead import Lead

@@ -93,8 +93,7 @@ class DefaultCallService(CallService):
                     # Handle error from Retell
                     logger.error(f"Error from Retell: {retell_call_result.get('message')}")
                     error_update = {
-                        "call_status": "error",
-                        "external_data": json.dumps(retell_call_result)
+                        "call_status": "error"
                     }
                     error_call = await self.call_repository.update_call(db_call["id"], error_update)
                     return error_call
@@ -102,8 +101,7 @@ class DefaultCallService(CallService):
                 # Update the call data with Retell specific information
                 update_data = {
                     "call_status": retell_call_result.get("call_status", "scheduled"),
-                    "external_call_id": retell_call_result.get("call_id"),
-                    "external_data": json.dumps(retell_call_result)
+                    "external_call_id": retell_call_result.get("call_id")
                 }
                 
                 # Update the call in our database
@@ -119,8 +117,7 @@ class DefaultCallService(CallService):
                 
                 # Update call status to error
                 error_update = {
-                    "call_status": "error",
-                    "external_data": json.dumps({"error": str(e)})
+                    "call_status": "error"
                 }
                 
                 error_call = await self.call_repository.update_call(db_call["id"], error_update)
@@ -256,8 +253,7 @@ class DefaultCallService(CallService):
                     # Update call status to in_progress
                     update_data = {
                         "call_status": "in_progress",
-                        "start_time": datetime.fromtimestamp(processed_webhook.get("timestamp", 0) / 1000) if processed_webhook.get("timestamp") else datetime.now(),
-                        "external_data": json.dumps(processed_webhook.get("raw_data", {}))
+                        "start_time": datetime.fromtimestamp(processed_webhook.get("timestamp", 0) / 1000) if processed_webhook.get("timestamp") else datetime.now()
                     }
                     updated_call = await self.call_repository.update_call(call_id, update_data)
                     return {"status": "success", "call": updated_call}
@@ -274,8 +270,7 @@ class DefaultCallService(CallService):
                         "end_time": datetime.fromtimestamp(processed_webhook.get("timestamp", 0) / 1000) if processed_webhook.get("timestamp") else datetime.now(),
                         "duration": duration,
                         "recording_url": recording_url,
-                        "transcript": transcript,
-                        "external_data": json.dumps(processed_webhook.get("raw_data", {}))
+                        "transcript": transcript
                     }
                     updated_call = await self.call_repository.update_call(call_id, update_data)
                     return {"status": "success", "call": updated_call}
@@ -287,8 +282,7 @@ class DefaultCallService(CallService):
                     
                     update_data = {
                         "summary": summary,
-                        "sentiment": sentiment,
-                        "external_data": json.dumps(processed_webhook.get("raw_data", {}))
+                        "sentiment": sentiment
                     }
                     
                     updated_call = await self.call_repository.update_call(call_id, update_data)
@@ -491,7 +485,7 @@ class DefaultCallService(CallService):
         # Get follow-up calls using repository
         follow_up_calls_result = await self.call_repository.get_follow_up_calls_by_lead(lead_id)
         
-        return follow_up_calls_result.get("follow_up_calls", []) 
+        return follow_up_calls_result.get("follow_up_calls", [])
     
 
     #Optional. 
