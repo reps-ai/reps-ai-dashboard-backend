@@ -2,7 +2,8 @@
 User model representing system users with different roles.
 """
 from sqlalchemy import Column, String, DateTime, Boolean, Table, ForeignKey
-from sqlalchemy.sql import func
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 from sqlalchemy.dialects.postgresql import UUID
@@ -24,6 +25,7 @@ class User(Base):
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
+    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=True)
     username = Column(String(100), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)
@@ -33,11 +35,12 @@ class User(Base):
     phone = Column(String(20), nullable=True)
     profile_picture = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
     # Relationships
     gym = relationship("Gym", back_populates="users")
+    branch = relationship("Branch", back_populates="users")
     assigned_leads = relationship("Lead", foreign_keys="Lead.assigned_to_user_id", back_populates="assigned_to")
     call_logs = relationship("CallLog", foreign_keys="CallLog.agent_user_id", back_populates="agent")
     appointments_as_employee = relationship("Appointment", foreign_keys="Appointment.employee_user_id", back_populates="employee")
@@ -50,6 +53,7 @@ class User(Base):
         return {
             "id": self.id,
             "gym_id": self.gym_id,
+            "branch_id": self.branch_id,
             "username": self.username,
             "email": self.email,
             "first_name": self.first_name,

@@ -2,7 +2,8 @@
 Tag model for categorizing leads.
 """
 from sqlalchemy import Column, String, DateTime
-from sqlalchemy.sql import func
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 
@@ -16,8 +17,8 @@ class Tag(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name = Column(String(100), nullable=False)
     color = Column(String(20), nullable=True)  # Hex color code
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
     # Relationships
     leads = relationship("Lead", secondary="lead_tag", back_populates="tags")

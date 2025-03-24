@@ -2,7 +2,8 @@
 Appointment model for tracking scheduled appointments with leads.
 """
 from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, ForeignKey
-from sqlalchemy.sql import func
+from sqlalchemy.sql.sqltypes import TIMESTAMP
+from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 from sqlalchemy.dialects.postgresql import UUID
@@ -24,8 +25,8 @@ class Appointment(Base):
     duration = Column(Integer, nullable=True)  # in minutes
     appointment_status = Column(String(50), nullable=False)  # scheduled, completed, cancelled, no_show
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
+    updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     reminder_sent = Column(Boolean, default=False, nullable=False)
     employee_name = Column(String(255), nullable=True)  # In case employee is not a system user

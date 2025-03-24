@@ -8,9 +8,6 @@ from typing import Optional, Dict, Any, List
 ENV = os.getenv("ENV", "development")
 DEBUG = ENV == "development"
 
-# Database settings
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/ai_dashboard")
-
 # Retell API settings
 RETELL_API_KEY = os.getenv("RETELL_API_KEY", "")
 RETELL_API_URL = os.getenv("RETELL_API_URL", "https://api.retell.io")
