@@ -203,7 +203,6 @@ class RetellImplementation(RetellIntegration):
                         parts = line.split(":", 1)
                         role = "agent" if "Agent" in parts[0] else "user"
                         content = parts[1].strip()
-                        
                         parsed_transcript.append({
                             "role": role,
                             "content": content

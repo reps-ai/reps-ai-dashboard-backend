@@ -6,7 +6,7 @@ from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
-
+from sqlalchemy.dialects.postgresql import UUID
 from ...base import Base
 
 class KnowledgeBase(Base):
@@ -14,9 +14,9 @@ class KnowledgeBase(Base):
     
     __tablename__ = "knowledge_base"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
     pdf_url = Column(String(255), nullable=True)
     question = Column(Text, nullable=True)
     answer = Column(Text, nullable=True)

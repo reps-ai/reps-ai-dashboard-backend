@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
+from sqlalchemy.dialects.postgresql import UUID
 
 from ...base import Base
 
@@ -14,10 +15,10 @@ class FollowUpCampaign(Base):
     
     __tablename__ = "follow_up_campaigns"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     start_date = Column(DateTime, nullable=False)

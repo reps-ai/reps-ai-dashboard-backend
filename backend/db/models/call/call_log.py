@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
-
+from sqlalchemy.dialects.postgresql import UUID
 from ..base import Base
 
 class CallLog(Base):
@@ -15,10 +15,10 @@ class CallLog(Base):
     
     __tablename__ = "call_logs"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
-    lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False)
     duration = Column(Integer, nullable=True)  # in seconds
     call_type = Column(String(50), nullable=False)  # outbound or inbound
     human_notes = Column(Text, nullable=True)

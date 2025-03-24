@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
-
+from sqlalchemy.dialects.postgresql import UUID
 from ..base import Base
 
 class GymSettings(Base):
@@ -14,9 +14,9 @@ class GymSettings(Base):
     
     __tablename__ = "gym_settings"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False, unique=True)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False, unique=True)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
     name = Column(String(255), nullable=False)
     phone = Column(String(20), nullable=False)
     address = Column(String(255), nullable=False)

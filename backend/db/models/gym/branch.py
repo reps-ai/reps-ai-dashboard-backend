@@ -16,7 +16,7 @@ class Branch(Base):
     
     __tablename__ = "branches"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=True)
     name = Column(String(255), nullable=False)
     address = Column(Text, nullable=True)
