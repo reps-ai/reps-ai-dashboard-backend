@@ -19,6 +19,7 @@ from ....utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
+#Aditya
 async def get_lead_with_related_data(session: AsyncSession, lead_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a lead with all related data.
@@ -67,6 +68,8 @@ async def get_lead_with_related_data(session: AsyncSession, lead_id: str) -> Opt
     
     return lead_dict
 
+
+#Rachit.
 async def create_lead_db(
     session: AsyncSession,
     lead_data: Dict[str, Any]
@@ -183,6 +186,8 @@ async def delete_lead_db(
         logger.error(f"Error deleting lead {lead_id}: {str(e)}")
         raise
 
+
+#Optional
 async def get_converted_leads_db(
     session: AsyncSession,
     gym_id: str,
@@ -243,6 +248,7 @@ async def get_converted_leads_db(
         }
     }
 
+#Optional
 async def get_lead_conversion_details_db(
     session: AsyncSession,
     lead_id: str
@@ -276,6 +282,7 @@ async def get_lead_conversion_details_db(
     
     return lead_data
 
+#Optional
 async def get_leads_by_assigned_user_db(
     session: AsyncSession,
     user_id: str,
@@ -321,6 +328,7 @@ async def get_leads_by_assigned_user_db(
             "pages": (total_leads + page_size - 1) // page_size
         }
     }
+
 
 def build_lead_filters(base_query, filters: Dict[str, Any]):
     """
@@ -402,6 +410,7 @@ def build_lead_filters(base_query, filters: Dict[str, Any]):
     
     return base_query
 
+#Aditya
 async def get_leads_by_gym_with_filters(
     session: AsyncSession,
     branch_id: str,
@@ -464,6 +473,7 @@ async def get_leads_by_gym_with_filters(
         }
     }
 
+#Rachit
 async def update_lead_after_call_db(
     session: AsyncSession,
     lead_id: str,
@@ -675,6 +685,8 @@ async def get_prioritized_leads_db(
     
     return [await get_lead_with_related_data(session, lead.id) for lead in all_leads]
 
+
+#Optional
 async def get_leads_for_retry_db(
     session: AsyncSession,
     campaign_id: str,

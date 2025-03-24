@@ -18,6 +18,8 @@ from ....utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+#ADITYA
 async def get_call_with_related_data(session: AsyncSession, call_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a call with all related data.
@@ -434,6 +436,7 @@ async def get_calls_by_status_db(
         }
     }
 
+#Vishwas
 async def get_calls_by_outcome_db(
     session: AsyncSession,
     gym_id: str,
@@ -660,6 +663,10 @@ async def delete_call_log_db(
     
     return result.rowcount > 0
 
+
+"""
+OPTIONAL BEYOND THIS POINT
+"""
 # Follow-up call specific functions
 async def get_follow_up_call_db(
     session: AsyncSession,
