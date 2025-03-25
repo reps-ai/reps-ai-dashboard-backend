@@ -526,6 +526,7 @@ async def get_calls_by_outcome_db(
         }
     }
 
+#Vishwas.
 async def update_call_metrics_db(
     session: AsyncSession,
     call_id: str,
@@ -660,7 +661,8 @@ async def delete_call_log_db(
     
     return result.rowcount > 0
 
-# Follow-up call specific functions
+
+# Follow-up call specific functions -> Will be done later.
 async def get_follow_up_call_db(
     session: AsyncSession,
     follow_up_call_id: str
