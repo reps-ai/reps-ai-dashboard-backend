@@ -3,8 +3,9 @@ Database helper functions for call-related operations.
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_, or_, func, desc, update, delete
+from sqlalchemy import select, and_, or_, func, desc, update, delete, cast, types
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 
 from ...models.call.call_log import CallLog
 from ...models.lead import Lead
@@ -18,6 +19,7 @@ from ....utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
+#Works
 async def get_call_with_related_data(session: AsyncSession, call_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a call with all related data.
@@ -92,6 +94,7 @@ async def get_call_with_related_data(session: AsyncSession, call_id: str) -> Opt
     
     return call_dict
 
+#No errors, but no relation between campaign_id and call logs.
 async def get_calls_by_campaign_db(
     session: AsyncSession,
     campaign_id: str,
@@ -116,7 +119,10 @@ async def get_calls_by_campaign_db(
         Dictionary containing calls and pagination info
     """
     # Get calls for the campaign directly from CallLog
-    base_query = select(CallLog).where(CallLog.campaign_id == campaign_id)
+    # Cast the campaign_id string to UUID to match the database column type
+    campaign_uuid = UUID(campaign_id)
+    
+    base_query = select(CallLog).where(CallLog.campaign_id == campaign_uuid)
 
      # Apply sorting: try to get the sort column from CallLog;
     # if not found, default to CallLog.start_time
@@ -164,6 +170,7 @@ async def get_calls_by_campaign_db(
         }
     }
 
+#Works
 async def get_calls_by_lead_db(
     session: AsyncSession,
     lead_id: str,
@@ -234,6 +241,7 @@ async def get_calls_by_lead_db(
         }
     }
 
+#Works
 async def get_calls_by_date_range_db(
     session: AsyncSession,
     gym_id: str,
@@ -259,9 +267,11 @@ async def get_calls_by_date_range_db(
         Dictionary containing calls and pagination info
     """
     # First, get branch IDs for the gym
-    branch_query = select(Branch.gym_id).where(Branch.gym_id == gym_id)#TODO: check if we want calls by gym_id or branch_id
+    branch_query = select(Branch.id).where(Branch.gym_id == gym_id)
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
+    
+    logger.info(f"Found {len(branch_ids)} branches for gym {gym_id}")
     
     if not branch_ids:
         return {
@@ -278,6 +288,8 @@ async def get_calls_by_date_range_db(
     lead_query = select(Lead.id).where(Lead.branch_id.in_(branch_ids))
     lead_result = await session.execute(lead_query)
     lead_ids = [row[0] for row in lead_result]
+    
+    logger.info(f"Found {len(lead_ids)} leads for branches {branch_ids}")
     
     if not lead_ids:
         return {
@@ -300,8 +312,9 @@ async def get_calls_by_date_range_db(
         ))
     )
     
+    logger.info(f"Searching for calls between {start_date} and {end_date}")
+    
     # order the calls by start_time
-
     if sort_order.lower() == "asc":
         base_query = base_query.order_by(CallLog.start_time.asc())
     else:
@@ -311,6 +324,8 @@ async def get_calls_by_date_range_db(
     count_query = select(func.count()).select_from(base_query.subquery())
     total_count = await session.execute(count_query)
     total = total_count.scalar_one()
+    
+    logger.info(f"Found {total} calls in date range")
     
     # Get calls with pagination
     offset = (page - 1) * page_size
@@ -337,6 +352,7 @@ async def get_calls_by_date_range_db(
         }
     }
 
+#Works
 async def get_calls_by_status_db(
     session: AsyncSession,
     gym_id: str,
@@ -362,10 +378,11 @@ async def get_calls_by_status_db(
         List of scheduled call data
     """
     # First, get branch IDs for the gym
-    branch_query = select(Branch.gym_id).where(Branch.gym_id == gym_id)#TODO: check if we want calls by gym_id or branch_id
+    branch_query = select(Branch.id).where(Branch.gym_id == gym_id)#TODO: check if we want calls by gym_id or branch_id
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
     
+    logger.info(f"Found {len(branch_ids)} branches for gym {gym_id}")
     if not branch_ids:
         return {
             "calls": [],
@@ -434,6 +451,7 @@ async def get_calls_by_status_db(
         }
     }
 
+#Works
 async def get_calls_by_outcome_db(
     session: AsyncSession,
     gym_id: str,
@@ -455,10 +473,11 @@ async def get_calls_by_outcome_db(
         Dictionary containing calls and pagination info
     """
     # First, get branch IDs for the gym
-    branch_query = select(Branch.gym_id).where(Branch.gym_id == gym_id) #TODO: check if we want calls by gym_id or branch_id
+    branch_query = select(Branch.id).where(Branch.gym_id == gym_id) #TODO: check if we want calls by gym_id or branch_id
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
     
+    logger.info(f"Found {len(branch_ids)} branches for gym {gym_id}")
     if not branch_ids:
         return {
             "calls": [],
