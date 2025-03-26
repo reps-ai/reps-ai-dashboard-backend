@@ -31,6 +31,7 @@ class PostgresLeadRepository(LeadRepository):
         """Initialize with a database session."""
         self.session = session
     
+    #Works - Add error handling
     async def create_lead(self, lead_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new lead."""
         # Create lead record
@@ -40,6 +41,7 @@ class PostgresLeadRepository(LeadRepository):
         
         return await get_lead_with_related_data(self.session, lead.id)
     
+    #Works
     async def get_lead_by_id(self, lead_id: str) -> Optional[Dict[str, Any]]:
         """Get lead details by ID."""
         return await get_lead_with_related_data(self.session, lead_id)
@@ -82,7 +84,8 @@ class PostgresLeadRepository(LeadRepository):
         
         return True
     
-    async def get_leads_by_gym(
+    #Works
+    async def get_leads_by_branch(
         self,
         branch_id: str,
         filters: Optional[Dict[str, Any]] = None,
@@ -283,9 +286,10 @@ class PostgresLeadRepository(LeadRepository):
             }
         }
     
+    #Works
     async def get_prioritized_leads(
         self,
-        gym_id: str,
+        branch_id: str,
         count: int,
         qualification: Optional[str] = None,
         exclude_leads: Optional[List[str]] = None
@@ -293,7 +297,7 @@ class PostgresLeadRepository(LeadRepository):
         """Get prioritized leads for campaigns."""
         return await get_prioritized_leads_db(
             self.session,
-            gym_id,
+            branch_id,
             count,
             qualification,
             exclude_leads
