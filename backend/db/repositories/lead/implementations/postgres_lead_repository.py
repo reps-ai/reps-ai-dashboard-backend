@@ -14,6 +14,7 @@ from ....models.campaign.follow_up_campaign import FollowUpCampaign
 from ...lead.interface import LeadRepository
 from ....helpers.lead.lead_queries import (
     get_lead_with_related_data,
+    update_lead_db,
     build_lead_filters,
     get_leads_by_gym_with_filters,
     update_lead_after_call_db,
@@ -46,6 +47,7 @@ class PostgresLeadRepository(LeadRepository):
         """Get lead details by ID."""
         return await get_lead_with_related_data(self.session, lead_id)
     
+    #Works
     async def update_lead(self, lead_id: str, lead_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update lead details."""
         # Check if lead exists
@@ -66,7 +68,7 @@ class PostgresLeadRepository(LeadRepository):
         await self.session.commit()
         
         return await get_lead_with_related_data(self.session, lead_id)
-    
+    #Works
     async def delete_lead(self, lead_id: str) -> bool:
         """Delete a lead."""
         # Check if lead exists
@@ -101,6 +103,7 @@ class PostgresLeadRepository(LeadRepository):
             page_size
         )
     
+
     async def get_leads_by_qualification(
         self,
         gym_id: str,
@@ -118,6 +121,7 @@ class PostgresLeadRepository(LeadRepository):
             page_size
         )
     
+
     async def update_lead_qualification(
         self,
         lead_id: str,
@@ -125,27 +129,9 @@ class PostgresLeadRepository(LeadRepository):
     ) -> Optional[Dict[str, Any]]:
         """Update the qualification status of a lead."""
         # Check if lead exists
-        lead_query = select(Lead).where(Lead.id == lead_id)
-        lead_result = await self.session.execute(lead_query)
-        lead = lead_result.scalar_one_or_none()
-        
-        if not lead:
-            return None
-        
-        # Update lead qualification directly
-        update_query = (
-            update(Lead)
-            .where(Lead.id == lead_id)
-            .values(
-                qualification_score=qualification,
-                updated_at=datetime.now()
-            )
-        )
-        await self.session.execute(update_query)
-        await self.session.commit()
-        
-        return await get_lead_with_related_data(self.session, lead_id)
+        return await update_lead_db(self.session, lead_id, {"qualification_score": qualification})
     
+    #Works
     async def add_tags_to_lead(
         self,
         lead_id: str,
@@ -196,6 +182,7 @@ class PostgresLeadRepository(LeadRepository):
         
         return await get_lead_with_related_data(self.session, lead_id)
     
+    #Works
     async def remove_tags_from_lead(
         self,
         lead_id: str,
@@ -226,6 +213,7 @@ class PostgresLeadRepository(LeadRepository):
         
         return await get_lead_with_related_data(self.session, lead_id)
     
+    #Doesn't work because of agent_user_id -> Needs fixing.
     async def update_lead_after_call(
         self,
         lead_id: str,
@@ -323,21 +311,32 @@ class PostgresLeadRepository(LeadRepository):
         Returns:
             Updated lead data if successful, None if lead not found
         """
-        pass
+        # Check if lead exists
+        return await update_lead_db(self.session, lead_id, {"notes": notes})
 
-    async def get_leads_by_status(self, gym_id: str, status: str) -> List[Dict[str, Any]]:
+    #Works
+    async def get_leads_by_status(self, branch_id: str, status: str) -> List[Dict[str, Any]]:
         """
         Get leads by status.
 
         Args:
-            gym_id: Unique identifier of the gym
+            branch_id: Unique identifier of the branch
             status: Status to filter by
 
         Returns:
             List of lead data with the specified status
         """
-        pass
+        filters = {"lead_status": status}
+        results = await get_leads_by_gym_with_filters(
+            self.session,
+            branch_id,
+            filters,
+            page=1,
+            page_size=100
+        )
+        return results.get("leads", [])
 
+    #Works
     async def update_lead_status(self, lead_id: str, status: str) -> Optional[Dict[str, Any]]:
         """
         Update lead status.
@@ -349,4 +348,5 @@ class PostgresLeadRepository(LeadRepository):
         Returns:
             Updated lead data if successful, None if lead not found
         """
-        pass
+        # Check if lead exists
+        return await update_lead_db(self.session, lead_id, {"lead_status": status})
