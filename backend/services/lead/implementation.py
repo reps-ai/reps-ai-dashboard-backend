@@ -25,6 +25,7 @@ class DefaultLeadService(LeadService):
         """
         self.lead_repository = lead_repository
     
+    #correct parameters
     async def get_lead(self, lead_id: str) -> Dict[str, Any]:
         """
         Get lead details by ID.

@@ -147,7 +147,9 @@ class DefaultCallService(CallService):
         
         return call
     
-    async def get_calls_by_campaign(self, campaign_id: str) -> List[Dict[str, Any]]:
+    async def get_calls_by_campaign(self, campaign_id: str,
+        page: int = 1,
+        page_size: int = 50) -> List[Dict[str, Any]]:
         """
         Get calls for a campaign.
         
@@ -160,11 +162,13 @@ class DefaultCallService(CallService):
         logger.info(f"Getting calls for campaign: {campaign_id}")
         
         # Get calls using repository
-        calls_result = await self.call_repository.get_calls_by_campaign(campaign_id)
+        calls_result = await self.call_repository.get_calls_by_campaign(campaign_id,page,page_size)
         
         return calls_result.get("calls", [])
     
-    async def get_calls_by_lead(self, lead_id: str) -> List[Dict[str, Any]]:
+    async def get_calls_by_lead(self, lead_id: str,
+        page: int = 1,
+        page_size: int = 50) -> List[Dict[str, Any]]:
         """
         Get calls for a lead.
         
@@ -177,7 +181,7 @@ class DefaultCallService(CallService):
         logger.info(f"Getting calls for lead: {lead_id}")
         
         # Get calls using repository
-        calls_result = await self.call_repository.get_calls_by_lead(lead_id)
+        calls_result = await self.call_repository.get_calls_by_lead(lead_id,page,page_size)
         
         return calls_result.get("calls", [])
     
@@ -185,7 +189,9 @@ class DefaultCallService(CallService):
         self, 
         gym_id: str, 
         start_date: datetime, 
-        end_date: datetime
+        end_date: datetime,
+        page: int = 1,
+        page_size: int = 50
     ) -> List[Dict[str, Any]]:
         """
         Get calls for a gym within a date range.
@@ -202,7 +208,7 @@ class DefaultCallService(CallService):
         
         # Get calls using repository
         calls_result = await self.call_repository.get_calls_by_date_range(
-            gym_id, start_date, end_date
+            gym_id, start_date, end_date, page, page_size
         )
         
         return calls_result.get("calls", [])
