@@ -103,7 +103,7 @@ class PostgresLeadRepository(LeadRepository):
             page_size
         )
     
-
+    #Ignore
     async def get_leads_by_qualification(
         self,
         gym_id: str,
@@ -121,7 +121,7 @@ class PostgresLeadRepository(LeadRepository):
             page_size
         )
     
-
+    #Ignore
     async def update_lead_qualification(
         self,
         lead_id: str,

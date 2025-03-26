@@ -15,6 +15,7 @@ class DefaultLeadService(LeadService):
     Default implementation of the Lead Management Service.
     """
     
+    """Vishwas Implements"""
     def __init__(self, lead_repository: LeadRepository):
         """
         Initialize the lead service.
@@ -39,6 +40,7 @@ class DefaultLeadService(LeadService):
             raise ValueError(f"Lead not found: {lead_id}")
         return lead
     
+    #Background Task
     async def update_lead(self, lead_id: str, lead_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update lead information.
@@ -91,6 +93,7 @@ class DefaultLeadService(LeadService):
         logger.info(f"Retrieved {len(leads)} prioritized leads for gym: {gym_id}")
         return leads
     
+    #Background Task
     async def update_lead_after_call(self, lead_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update lead information after a call.
@@ -129,6 +132,7 @@ class DefaultLeadService(LeadService):
         logger.info(f"Updated lead after call: {lead_id}, call: {call_data.get('call_id')}")
         return lead
     
+    #Background Task
     async def qualify_lead(self, lead_id: str, qualification: str) -> Dict[str, Any]:
         """
         Update lead qualification status.
@@ -154,6 +158,7 @@ class DefaultLeadService(LeadService):
         logger.info(f"Updated lead qualification: {lead_id} -> {qualification}")
         return lead
     
+    #Background Task
     async def add_tags_to_lead(self, lead_id: str, tags: List[str]) -> Dict[str, Any]:
         """
         Add tags to a lead.
@@ -196,7 +201,7 @@ class DefaultLeadService(LeadService):
     
     async def get_paginated_leads(
         self,
-        gym_id: str,
+        branch_id: str,
         page: int = 1,
         page_size: int = 50,
         filters: Optional[Dict[str, Any]] = None
@@ -215,8 +220,8 @@ class DefaultLeadService(LeadService):
                 - leads: List of lead data
                 - pagination: Dictionary with total, page, page_size, and pages
         """
-        result = await self.lead_repository.get_leads_by_gym(
-            gym_id=gym_id,
+        result = await self.lead_repository.get_leads_by_branch(
+            branch_id=branch_id,
             filters=filters,
             page=page,
             page_size=page_size
@@ -225,7 +230,7 @@ class DefaultLeadService(LeadService):
         leads = result.get('leads', [])
         pagination = result.get('pagination', {})
         logger.info(
-            f"Retrieved {len(leads)} leads for gym: {gym_id}, "
+            f"Retrieved {len(leads)} leads for branch: {branch_id}, "
             f"page: {page}, total: {pagination.get('total', 0)}"
         )
         return result 

@@ -29,6 +29,7 @@ class DefaultCallService(CallService):
         self.call_repository = call_repository
         self.retell_integration = retell_integration
     
+    #Aditya
     async def trigger_call(self, lead_id: str, campaign_id: Optional[str] = None, lead_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Trigger a call to a lead.
@@ -55,7 +56,8 @@ class DefaultCallService(CallService):
                 "phone_number": "PLACEHOLDER-PHONE-NUMBER",  # Replace with actual phone number
                 "name": "Placeholder Name",  # Replace with actual name
                 "gym_id": "PLACEHOLDER-GYM-ID",  # Replace with actual gym ID
-                "branch_id": "PLACEHOLDER-BRANCH-ID"  # Replace with actual branch ID
+                "branch_id": "PLACEHOLDER-BRANCH-ID",  # Replace with actual branch ID
+                "interest": "PLACEHOLDER-INTEREST"  # Replace with actual interest
             }
         
         # Create initial call log entry in database
@@ -144,7 +146,7 @@ class DefaultCallService(CallService):
             raise ValueError(f"Call with ID {call_id} not found")
         
         return call
-      
+    
     async def get_calls_by_campaign(self, campaign_id: str) -> List[Dict[str, Any]]:
         """
         Get calls for a campaign.
@@ -205,6 +207,9 @@ class DefaultCallService(CallService):
         
         return calls_result.get("calls", [])
     
+
+    """Optional Beyond This point."""
+    #Optional
     async def process_webhook_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a webhook event from the call provider.

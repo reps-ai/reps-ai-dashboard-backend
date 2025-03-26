@@ -123,7 +123,7 @@ class LeadService(ABC):
     @abstractmethod
     async def get_paginated_leads(
         self,
-        gym_id: str,
+        branch_id: str,
         page: int = 1,
         page_size: int = 50,
         filters: Optional[Dict[str, Any]] = None
@@ -132,7 +132,7 @@ class LeadService(ABC):
         Get paginated leads for a gym with optional filters.
         
         Args:
-            gym_id: ID of the gym
+            branch_id: ID of the branch
             page: Page number (1-based)
             page_size: Number of leads per page
             filters: Optional dictionary of filter criteria
