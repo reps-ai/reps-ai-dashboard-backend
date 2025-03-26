@@ -17,11 +17,7 @@ from ....helpers.call.call_queries import (
     get_calls_by_campaign_db,
     get_calls_by_lead_db,
     get_calls_by_date_range_db,
-    get_active_calls_db,
-    get_scheduled_calls_db,
     get_calls_by_outcome_db,
-    update_call_recording_db,
-    update_call_transcript_db,
     update_call_metrics_db
 )
 from .....utils.logging.logger import get_logger
@@ -35,6 +31,7 @@ class PostgresCallRepository(CallRepository):
         """Initialize with a database session."""
         self.session = session
     
+    #Works
     async def create_call(self, call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new call record.
@@ -55,6 +52,7 @@ class PostgresCallRepository(CallRepository):
         
         return new_call.to_dict()
     
+    #Works
     async def get_call_by_id(self, call_id: str) -> Optional[Dict[str, Any]]:
         """
         Get call details by ID.
@@ -68,6 +66,7 @@ class PostgresCallRepository(CallRepository):
         logger.info(f"Getting call with ID: {call_id}")
         return await get_call_with_related_data(self.session, call_id)
     
+    #Works
     async def update_call(self, call_id: str, call_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Update call details.
@@ -98,6 +97,7 @@ class PostgresCallRepository(CallRepository):
         # Get updated call data
         return await get_call_with_related_data(self.session, call_id)
     
+    #Works
     async def delete_call(self, call_id: str) -> bool:
         """
         Delete a call record.
@@ -126,6 +126,7 @@ class PostgresCallRepository(CallRepository):
         
         return True
     
+    ##Errors
     async def get_calls_by_campaign(
         self, 
         campaign_id: str,
@@ -146,6 +147,7 @@ class PostgresCallRepository(CallRepository):
         logger.info(f"Getting calls for campaign: {campaign_id}")
         return await get_calls_by_campaign_db(self.session, campaign_id, page, page_size)
     
+    #Works
     async def get_calls_by_lead(
         self, 
         lead_id: str,
@@ -165,10 +167,11 @@ class PostgresCallRepository(CallRepository):
         """
         logger.info(f"Getting calls for lead: {lead_id}")
         return await get_calls_by_lead_db(self.session, lead_id, page, page_size)
-    
+
+    #Works
     async def get_calls_by_date_range(
         self, 
-        gym_id: str, 
+        branch_id: str, 
         start_date: datetime, 
         end_date: datetime,
         page: int = 1,
@@ -178,7 +181,7 @@ class PostgresCallRepository(CallRepository):
         Get calls within a date range with pagination.
         
         Args:
-            gym_id: Gym ID (branch_id)
+            branch_id: Branch ID
             start_date: Start of the date range
             end_date: End of the date range
             page: Page number
@@ -187,24 +190,13 @@ class PostgresCallRepository(CallRepository):
         Returns:
             Dictionary containing calls and pagination info
         """
-        logger.info(f"Getting calls for gym {gym_id} from {start_date} to {end_date}")
+        logger.info(f"Getting calls for branch {branch_id} from {start_date} to {end_date}")
         return await get_calls_by_date_range_db(
-            self.session, gym_id, start_date, end_date, page, page_size
+            self.session, branch_id, start_date, end_date, page, page_size
         )
     
-    async def get_active_calls(self, gym_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all active calls for a gym.
-        
-        Args:
-            gym_id: Gym ID (branch_id)
-            
-        Returns:
-            List of active call data
-        """
-        logger.info(f"Getting active calls for gym: {gym_id}")
-        return await get_active_calls_db(self.session, gym_id)
-    
+
+    #Optional
     async def get_scheduled_calls(
         self, 
         gym_id: str, 
@@ -227,7 +219,7 @@ class PostgresCallRepository(CallRepository):
     
     async def get_calls_by_outcome(
         self, 
-        gym_id: str, 
+        branch_id: str, 
         outcome: str,
         page: int = 1,
         page_size: int = 50
@@ -236,7 +228,7 @@ class PostgresCallRepository(CallRepository):
         Get calls by outcome with pagination.
         
         Args:
-            gym_id: Gym ID (branch_id)
+            branch_id: Branch ID
             outcome: Outcome to filter by
             page: Page number
             page_size: Page size
@@ -244,9 +236,10 @@ class PostgresCallRepository(CallRepository):
         Returns:
             Dictionary containing calls and pagination info
         """
-        logger.info(f"Getting calls for gym {gym_id} with outcome: {outcome}")
-        return await get_calls_by_outcome_db(self.session, gym_id, outcome, page, page_size)
+        logger.info(f"Getting calls for branch {branch_id} with outcome: {outcome}")
+        return await get_calls_by_outcome_db(self.session, branch_id, outcome, page, page_size)
     
+    #Optional
     async def update_call_recording(
         self, 
         call_id: str, 
@@ -265,6 +258,7 @@ class PostgresCallRepository(CallRepository):
         logger.info(f"Updating recording for call: {call_id}")
         return await update_call_recording_db(self.session, call_id, recording_url)
     
+    #Optional
     async def update_call_transcript(
         self, 
         call_id: str, 
@@ -283,6 +277,7 @@ class PostgresCallRepository(CallRepository):
         logger.info(f"Updating transcript for call: {call_id}")
         return await update_call_transcript_db(self.session, call_id, transcript)
     
+    #Optional
     async def update_call_metrics(
         self, 
         call_id: str, 
@@ -300,7 +295,10 @@ class PostgresCallRepository(CallRepository):
         """
         logger.info(f"Updating metrics for call: {call_id}")
         return await update_call_metrics_db(self.session, call_id, metrics_data)
-    
+
+    """Optional From this point"""
+
+    """"""
     async def create_follow_up_call(
         self, 
         follow_up_call_data: Dict[str, Any]
@@ -478,6 +476,7 @@ class PostgresCallRepository(CallRepository):
         }
     
     async def get_follow_up_calls_by_lead(
+        
         self, 
         lead_id: str,
         page: int = 1,
@@ -537,4 +536,94 @@ class PostgresCallRepository(CallRepository):
                 "page_size": page_size,
                 "pages": (total + page_size - 1) // page_size
             }
-        } 
+        }
+
+    # Stub implementations for abstract methods we're not using yet
+    
+    async def get_active_calls(self, gym_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all active calls for a gym.
+        
+        Args:
+            gym_id: Unique identifier of the gym
+            
+        Returns:
+            List of active call data
+        """
+        logger.info(f"Getting active calls for gym {gym_id}")
+        # Placeholder implementation
+        return []
+        
+    async def get_call_by_external_id(self, external_call_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a call by external call ID.
+        
+        Args:
+            external_call_id: External ID of the call (e.g., from Retell)
+        
+        Returns:
+            Dictionary containing call data, or None if not found
+        """
+        logger.info(f"Getting call with external ID: {external_call_id}")
+        # Placeholder implementation
+        return None
+        
+    async def save_call_recording(self, call_id: str, recording_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Save call recording information.
+        
+        Args:
+            call_id: Unique identifier of the call
+            recording_data: Dictionary containing recording details
+            
+        Returns:
+            Updated call data if successful, None if call not found
+        """
+        logger.info(f"Saving recording for call: {call_id}")
+        # Placeholder implementation
+        return await self.get_call_by_id(call_id)
+        
+    async def save_call_transcript(self, call_id: str, transcript_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Save call transcript.
+        
+        Args:
+            call_id: Unique identifier of the call
+            transcript_data: Dictionary containing transcript details
+            
+        Returns:
+            Updated call data if successful, None if call not found
+        """
+        logger.info(f"Saving transcript for call: {call_id}")
+        # Placeholder implementation
+        return await self.get_call_by_id(call_id)
+        
+    async def update_call_outcome(self, call_id: str, outcome: str) -> Optional[Dict[str, Any]]:
+        """
+        Update call outcome.
+        
+        Args:
+            call_id: Unique identifier of the call
+            outcome: New outcome
+            
+        Returns:
+            Updated call data if successful, None if call not found
+        """
+        logger.info(f"Updating outcome for call: {call_id}")
+        # Placeholder implementation using update_call
+        return await self.update_call(call_id, {"call_outcome": outcome})
+        
+    async def update_call_status(self, call_id: str, status: str) -> Optional[Dict[str, Any]]:
+        """
+        Update call status.
+        
+        Args:
+            call_id: Unique identifier of the call
+            status: New status
+            
+        Returns:
+            Updated call data if successful, None if call not found
+        """
+        logger.info(f"Updating status for call: {call_id}")
+        # Placeholder implementation using update_call
+        return await self.update_call(call_id, {"call_status": status}) 

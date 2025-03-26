@@ -244,7 +244,7 @@ async def get_calls_by_lead_db(
 #Works
 async def get_calls_by_date_range_db(
     session: AsyncSession,
-    gym_id: str,
+    branch_id: str,
     start_date: datetime,
     end_date: datetime,
     page: int = 1,
@@ -267,11 +267,11 @@ async def get_calls_by_date_range_db(
         Dictionary containing calls and pagination info
     """
     # First, get branch IDs for the gym
-    branch_query = select(Branch.id).where(Branch.gym_id == gym_id)
+    branch_query = select(Branch.id).where(Branch.id == branch_id)
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
     
-    logger.info(f"Found {len(branch_ids)} branches for gym {gym_id}")
+    logger.info(f"Found {len(branch_ids)} branches for branch {branch_id}")
     
     if not branch_ids:
         return {
@@ -454,7 +454,7 @@ async def get_calls_by_status_db(
 #Works
 async def get_calls_by_outcome_db(
     session: AsyncSession,
-    gym_id: str,
+    branch_id: str,
     outcome: str,
     page: int = 1,
     page_size: int = 50
@@ -473,11 +473,11 @@ async def get_calls_by_outcome_db(
         Dictionary containing calls and pagination info
     """
     # First, get branch IDs for the gym
-    branch_query = select(Branch.id).where(Branch.gym_id == gym_id) #TODO: check if we want calls by gym_id or branch_id
+    branch_query = select(Branch.id).where(Branch.id == branch_id) #TODO: check if we want calls by gym_id or branch_id
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
     
-    logger.info(f"Found {len(branch_ids)} branches for gym {gym_id}")
+    logger.info(f"Found {len(branch_ids)} branches for branch {branch_id}")
     if not branch_ids:
         return {
             "calls": [],
