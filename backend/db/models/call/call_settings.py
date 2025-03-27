@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
-from sqlalchemy.dialects.postgresql import UUID
+
 from ..base import Base
 
 class CallSettings(Base):
@@ -15,9 +15,9 @@ class CallSettings(Base):
     
     __tablename__ = "call_settings"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False, unique=True)
-    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False, unique=True)
+    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
     max_duration = Column(Integer, nullable=True)  # in seconds
     call_hours_start = Column(String(10), nullable=True)  # HH:MM format
     call_hours_end = Column(String(10), nullable=True)  # HH:MM format

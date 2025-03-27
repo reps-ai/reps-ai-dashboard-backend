@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
-from sqlalchemy.dialects.postgresql import UUID
+
 from ..base import Base
 
 class CallLog(Base):
@@ -15,10 +15,10 @@ class CallLog(Base):
     
     __tablename__ = "call_logs"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
-    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
-    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
+    lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
     duration = Column(Integer, nullable=True)  # in seconds
     call_type = Column(String(50), nullable=False)  # outbound or inbound
     human_notes = Column(Text, nullable=True)
@@ -32,7 +32,9 @@ class CallLog(Base):
     transcript = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     sentiment = Column(String(50), nullable=True)  # positive, negative, neutral
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey("follow_up_campaigns.id"), nullable=False)
+    campaign_id = Column(String(36), ForeignKey("follow_up_campaigns.id"), nullable=True)
+    external_call_id = Column(String(255), nullable=True)  # ID from external calling service (e.g., Retell)
+    external_data = Column(JSON, nullable=True)  # Raw data from external calling service
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -54,7 +56,9 @@ class CallLog(Base):
             "transcript": self.transcript,
             "summary": self.summary,
             "sentiment": self.sentiment,
-            "campaign_id": self.campaign_id
+            "campaign_id": self.campaign_id,
+            "external_call_id": self.external_call_id,
+            "external_data": self.external_data
         }
 
 from backend.db.models.lead.lead import Lead

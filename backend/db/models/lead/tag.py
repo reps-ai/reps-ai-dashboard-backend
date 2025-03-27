@@ -6,7 +6,7 @@ from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from sqlalchemy.orm import relationship
 from uuid import uuid4
-from sqlalchemy.dialects.postgresql import UUID
+
 from ...base import Base
 
 class Tag(Base):
@@ -14,7 +14,7 @@ class Tag(Base):
     
     __tablename__ = "tags"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name = Column(String(100), nullable=False)
     color = Column(String(20), nullable=True)  # Hex color code
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))

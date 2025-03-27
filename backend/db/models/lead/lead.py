@@ -7,7 +7,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
-from sqlalchemy.dialects.postgresql import UUID
 
 from ..base import Base
 
@@ -16,11 +15,11 @@ class Lead(Base):
     """Lead model representing potential gym members."""
     
     __tablename__ = "leads"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
-    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
-    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
+    assigned_to_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
@@ -101,7 +100,6 @@ from backend.db.models.member import Member
 from backend.db.models.lead.tag import Tag
 from backend.db.models.call.follow_up_call import FollowUpCall
 from backend.db.models.campaign.follow_up_campaign import FollowUpCampaign
-
 
 # Define relationships AFTER the class is defined:
 Lead.branch = relationship("Branch", back_populates="leads")

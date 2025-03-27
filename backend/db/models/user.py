@@ -66,6 +66,8 @@ from backend.db.models.call.follow_up_call import FollowUpCall
 User.gym = relationship("Gym", back_populates="users")
 User.branch = relationship("Branch", back_populates="users")
 User.assigned_leads = relationship("Lead", foreign_keys="Lead.assigned_to_user_id", back_populates="assigned_to")
+User.call_logs = relationship("CallLog", foreign_keys="CallLog.agent_user_id", back_populates="agent")
 User.appointments_as_employee = relationship("Appointment", foreign_keys="Appointment.employee_user_id", back_populates="employee")
 User.appointments_created = relationship("Appointment", foreign_keys="Appointment.created_by_user_id", back_populates="created_by")
+User.follow_up_calls = relationship("FollowUpCall", foreign_keys="FollowUpCall.agent_user_id", back_populates="agent")
 User.branches = relationship("Branch", secondary=user_branch, back_populates="users")

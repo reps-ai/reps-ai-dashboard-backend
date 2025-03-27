@@ -46,9 +46,6 @@ def create_mock_data():
     try:
         # Start a transaction
         trans = conn.begin()
-
-        # Delete all existing data first
-        delete_all_data(conn)
         
         # Create mock gyms
         print("Creating mock gyms...")
@@ -94,17 +91,17 @@ def create_mock_data():
         print("Creating mock call settings...")
         create_call_settings(conn, gym_ids, branch_ids)
         
-        # Create follow-up campaigns BEFORE call logs so that valid campaign_ids are available
-        print("Creating mock follow-up campaigns...")
-        campaign_ids = create_follow_up_campaigns(conn, gym_ids, branch_ids, lead_ids)
-        
-        # Create mock call logs with valid campaign_id values
+        # Create mock call logs
         print("Creating mock call logs...")
-        create_call_logs(conn, gym_ids, branch_ids, lead_ids, campaign_ids)
+        create_call_logs(conn, gym_ids, branch_ids, lead_ids)
         
-        # Create mock follow-up calls...
+        # Create mock follow-up calls
         print("Creating mock follow-up calls...")
-        create_follow_up_calls(conn, gym_ids, branch_ids, lead_ids, campaign_ids)
+        create_follow_up_calls(conn, gym_ids, branch_ids, lead_ids)
+        
+        # Create mock follow-up campaigns
+        print("Creating mock follow-up campaigns...")
+        create_follow_up_campaigns(conn, gym_ids, branch_ids, lead_ids)
         
         # Create mock knowledge base records
         print("Creating mock knowledge base records...")
@@ -405,50 +402,45 @@ def create_appointments(conn, lead_ids, gym_ids, branch_ids, user_ids):
                 )
                 """))
 
-def create_ai_settings(conn, gym_ids, branch_ids):
-    """Create mock AI settings records; one record per branch."""
+def create_ai_settings(conn, gym_ids, branch_ids, n=3):
+    """Create mock AI settings records."""
     ai_ids = []
-    # Use distinct branch_ids to satisfy UNIQUE constraint (one AI settings per branch)
-    for branch_id in random.sample(branch_ids, min(len(branch_ids), 3)):
-        result = conn.execute(text(f"SELECT gym_id FROM branches WHERE id = '{branch_id}'")).fetchone()
-        if not result:
-            continue
-        gym_id = result[0]
+    for _ in range(n):
+        ai_id = str(uuid.uuid4())
+        ai_ids.append(ai_id)
+        gym_id = random.choice(gym_ids)
+        branch_id = random.choice(branch_ids)
         personality = random.choice(["friendly", "formal", "casual"])
         agent_name = fake.first_name()
         greeting = "Hello, how can I help you?"
         allow_interruptions = random.choice([True, False])
         offer_human_transfer = random.choice([True, False])
         escalation_threshold = random.randint(1, 10)
-        ai_id = str(uuid.uuid4())
-        ai_ids.append(ai_id)
         conn.execute(text(f"""
         INSERT INTO ai_settings (id, gym_id, branch_id, personality, agent_name, greeting, allow_interruptions, offer_human_transfer, escalation_threshold, created_at)
-        VALUES ('{ai_id}', '{gym_id}', '{branch_id}', '{personality}', '{agent_name}', '{greeting}', {str(allow_interruptions).lower()}, {str(offer_human_transfer).lower()}, {escalation_threshold}, '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        VALUES ('{ai_id}', '{gym_id}', '{branch_id}', '{personality}', '{agent_name}', '{greeting}', {str(allow_interruptions).lower()}, {str(offer_human_transfer).lower()}, {escalation_threshold}, '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         """))
     return ai_ids
 
 def create_voice_settings(conn, gym_ids, branch_ids, n=3):
-    """Create mock Voice settings records; one record per branch."""
+    """Create mock Voice settings records."""
     vs_ids = []
-    for branch_id in random.sample(branch_ids, min(len(branch_ids), n)):
-        result = conn.execute(text(f"SELECT gym_id FROM branches WHERE id = '{branch_id}'")).fetchone()
-        if not result:
-            continue
-        gym_id = result[0]
+    for _ in range(n):
+        vs_id = str(uuid.uuid4())
+        vs_ids.append(vs_id)
+        gym_id = random.choice(gym_ids)
+        branch_id = random.choice(branch_ids)
         voice_type = random.choice(["male", "female"])
         speaking_speed = random.choice(["slow", "normal", "fast"])
         volume = random.choice(["low", "medium", "high"])
         voice_sample_url = fake.url()
-        vs_id = str(uuid.uuid4())
-        vs_ids.append(vs_id)
         conn.execute(text(f"""
         INSERT INTO voice_settings (id, gym_id, branch_id, voice_type, speaking_speed, volume, voice_sample_url, created_at)
-        VALUES ('{vs_id}', '{gym_id}', '{branch_id}', '{voice_type}', '{speaking_speed}', '{volume}', '{voice_sample_url}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        VALUES ('{vs_id}', '{gym_id}', '{branch_id}', '{voice_type}', '{speaking_speed}', '{volume}', '{voice_sample_url}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         """))
     return vs_ids
 
-def create_call_logs(conn, gym_ids, branch_ids, lead_ids, campaign_ids, n=10):
+def create_call_logs(conn, gym_ids, branch_ids, lead_ids, n=10):
     """Create mock call log records."""
     log_ids = []
     for _ in range(n):
@@ -468,23 +460,21 @@ def create_call_logs(conn, gym_ids, branch_ids, lead_ids, campaign_ids, n=10):
         transcript = fake.text(max_nb_chars=200)
         summary = fake.text(max_nb_chars=100)
         sentiment = random.choice(["positive", "negative", "neutral"])
-        campaign_id = random.choice(campaign_ids)
+        # campaign_id left NULL for now
         conn.execute(text(f"""
-        INSERT INTO call_logs (id, branch_id, gym_id, lead_id, duration, call_type, human_notes, outcome, call_status, start_time, end_time, recording_url, transcript, summary, sentiment, campaign_id)
-        VALUES ('{log_id}', '{branch_id}', '{gym_id}', '{lead_id}', {duration}, '{call_type}', '{human_notes}', '{outcome}', '{call_status}', '{start_time.strftime("%Y-%m-%d %H:%M:%S")}', '{end_time.strftime("%Y-%m-%d %H:%M:%S")}', '{recording_url}', '{transcript}', '{summary}', '{sentiment}', '{campaign_id}' )
+        INSERT INTO call_logs (id, branch_id, gym_id, lead_id, duration, call_type, human_notes, outcome, call_status, start_time, end_time, recording_url, transcript, summary, sentiment)
+        VALUES ('{log_id}', '{branch_id}', '{gym_id}', '{lead_id}', {duration}, '{call_type}', '{human_notes}', '{outcome}', '{call_status}', '{start_time.strftime("%Y-%m-%d %H:%M:%S")}', '{end_time.strftime("%Y-%m-%d %H:%M:%S")}', '{recording_url}', '{transcript}', '{summary}', '{sentiment}')
         """))
     return log_ids
 
 def create_call_settings(conn, gym_ids, branch_ids, n=3):
-    """Create mock call settings records; one record per branch."""
+    """Create mock call settings records."""
     cs_ids = []
-    for branch_id in random.sample(branch_ids, min(len(branch_ids), n)):
-        result = conn.execute(text(f"SELECT gym_id FROM branches WHERE id = '{branch_id}'")).fetchone()
-        if not result:
-            continue
-        gym_id = result[0]
+    for _ in range(n):
         cs_id = str(uuid.uuid4())
         cs_ids.append(cs_id)
+        gym_id = random.choice(gym_ids)
+        branch_id = random.choice(branch_ids)
         max_duration = random.randint(30, 300)
         call_hours_start = "09:00"
         call_hours_end = "17:00"
@@ -494,12 +484,12 @@ def create_call_settings(conn, gym_ids, branch_ids, n=3):
         do_not_disturb = random.choice([True, False])
         conn.execute(text(f"""
         INSERT INTO call_settings (id, branch_id, gym_id, max_duration, call_hours_start, call_hours_end, active_call_days, retry_attempts, retry_interval, do_not_disturb, created_at)
-        VALUES ('{cs_id}', '{branch_id}', '{gym_id}', {max_duration}, '{call_hours_start}', '{call_hours_end}', '{active_call_days}', {retry_attempts}, {retry_interval}, {str(do_not_disturb).lower()}, '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        VALUES ('{cs_id}', '{branch_id}', '{gym_id}', {max_duration}, '{call_hours_start}', '{call_hours_end}', '{active_call_days}', {retry_attempts}, {retry_interval}, {str(do_not_disturb).lower()}, '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         """))
     return cs_ids
 
-def create_follow_up_calls(conn, gym_ids, branch_ids, lead_ids, campaign_ids, n=5):
-    """Create mock follow-up call records using existing campaign IDs."""
+def create_follow_up_calls(conn, gym_ids, branch_ids, lead_ids, n=5):
+    """Create mock follow-up call records."""
     fuc_ids = []
     for _ in range(n):
         fuc_id = str(uuid.uuid4())
@@ -507,8 +497,7 @@ def create_follow_up_calls(conn, gym_ids, branch_ids, lead_ids, campaign_ids, n=
         gym_id = random.choice(gym_ids)
         branch_id = random.choice(branch_ids)
         lead_id = random.choice(lead_ids)
-        # Use a campaign_id from the provided list
-        campaign_id = random.choice(campaign_ids)
+        # campaign_id left NULL; could be updated later
         number_of_calls = random.randint(1, 5)
         call_date_time = datetime.now() - timedelta(days=random.randint(1,10))
         duration = random.randint(30, 300)
@@ -521,8 +510,8 @@ def create_follow_up_calls(conn, gym_ids, branch_ids, lead_ids, campaign_ids, n=
         summary = fake.text(max_nb_chars=100)
         sentiment = random.choice(["positive", "negative", "neutral"])
         conn.execute(text(f"""
-        INSERT INTO follow_up_calls (id, lead_id, branch_id, gym_id, campaign_id, number_of_calls, call_date_time, duration, call_type, human_notes, outcome, call_status, recording_url, transcript, summary, sentiment, created_at)
-        VALUES ('{fuc_id}', '{lead_id}', '{branch_id}', '{gym_id}', '{campaign_id}', {number_of_calls}, '{call_date_time.strftime("%Y-%m-%d %H:%M:%S")}', {duration}, '{call_type}', '{human_notes}', '{outcome}', '{call_status}', '{recording_url}', '{transcript}', '{summary}', '{sentiment}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        INSERT INTO follow_up_calls (id, lead_id, branch_id, gym_id, number_of_calls, call_date_time, duration, call_type, human_notes, outcome, call_status, recording_url, transcript, summary, sentiment, created_at)
+        VALUES ('{fuc_id}', '{lead_id}', '{branch_id}', '{gym_id}', {number_of_calls}, '{call_date_time.strftime("%Y-%m-%d %H:%M:%S")}', {duration}, '{call_type}', '{human_notes}', '{outcome}', '{call_status}', '{recording_url}', '{transcript}', '{summary}', '{sentiment}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         """))
     return fuc_ids
 
@@ -544,7 +533,7 @@ def create_follow_up_campaigns(conn, gym_ids, branch_ids, lead_ids, n=3):
         campaign_status = random.choice(["active", "completed", "paused", "cancelled"])
         conn.execute(text(f"""
         INSERT INTO follow_up_campaigns (id, lead_id, gym_id, branch_id, name, description, start_date, end_date, frequency, gap, campaign_status, created_at)
-        VALUES ('{campaign_id}', '{lead_id}', '{gym_id}', '{branch_id}', '{name}', '{description}', '{start_date.strftime("%Y-%m-%d %H:%M:%S")}', '{end_date.strftime("%Y-%m-%d %H:%M:%S")}', {frequency}, {gap}, '{campaign_status}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        VALUES ('{campaign_id}', '{lead_id}', '{gym_id}', '{branch_id}', '{name}', '{description}', '{start_date.strftime("%Y-%m-%d %H:%M:%S")}', '{end_date.strftime("%Y-%m-%d %H:%M:%S")}', {frequency}, {gap}, '{campaign_status}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         """))
     return campaign_ids
 
@@ -562,20 +551,18 @@ def create_knowledge_base(conn, gym_ids, branch_ids, n=3):
         tags = json.dumps(["faq", "general"])
         conn.execute(text(f"""
         INSERT INTO knowledge_base (id, branch_id, gym_id, pdf_url, question, answer, tags, created_at)
-        VALUES ('{kb_id}', '{branch_id}', '{gym_id}', '{pdf_url}', '{question}', '{answer}', '{tags}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        VALUES ('{kb_id}', '{branch_id}', '{gym_id}', '{pdf_url}', '{question}', '{answer}', '{tags}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         """))
     return kb_ids
 
 def create_gym_settings(conn, gym_ids, branch_ids, n=3):
-    """Create mock gym settings records; one record per branch."""
+    """Create mock gym settings records."""
     gs_ids = []
-    for branch_id in random.sample(branch_ids, min(len(branch_ids), n)):
-        result = conn.execute(text(f"SELECT gym_id FROM branches WHERE id = '{branch_id}'")).fetchone()
-        if not result:
-            continue
-        gym_id = result[0]
+    for _ in range(n):
         gs_id = str(uuid.uuid4())
         gs_ids.append(gs_id)
+        gym_id = random.choice(gym_ids)
+        branch_id = random.choice(branch_ids)
         name = f"{fake.company()} Settings"
         phone = generate_phone()
         address = fake.address().replace('\n', ' ')
@@ -585,37 +572,9 @@ def create_gym_settings(conn, gym_ids, branch_ids, n=3):
         description = fake.text(max_nb_chars=200)
         conn.execute(text(f"""
         INSERT INTO gym_settings (id, branch_id, gym_id, name, phone, address, website, email, logo_url, description, created_at)
-        VALUES ('{gs_id}', '{branch_id}', '{gym_id}', '{name}', '{phone}', '{address}', '{website}', '{email}', '{logo_url}', '{description}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        VALUES ('{gs_id}', '{branch_id}', '{gym_id}', '{name}', '{phone}', '{address}', '{website}', '{email}', '{logo_url}', '{description}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
         """))
     return gs_ids
-
-def delete_all_data(conn):
-    """Delete all data from all tables in the correct order to avoid foreign key conflicts."""
-    print("Deleting existing data...")
-    
-    # Delete in reverse order of dependencies
-    tables = [
-        "lead_tag",
-        "follow_up_calls",
-        "call_logs",
-        "appointments",
-        "follow_up_campaigns",
-        "members",
-        "leads",
-        "knowledge_base",
-        "gym_settings",
-        "call_settings",
-        "voice_settings",
-        "ai_settings",
-        "tags",
-        "users",
-        "branches",
-        "gyms"
-    ]
-    
-    for table in tables:
-        print(f"Deleting data from {table}...")
-        conn.execute(text(f"DELETE FROM {table}"))
 
 if __name__ == "__main__":
     create_mock_data()
