@@ -23,6 +23,8 @@ from ....helpers.lead.lead_queries import (
 )
 from .....utils.logging.logger import get_logger
 
+#TODO: figure out the compatibility issue with fastapi and pydantic
+
 logger = get_logger(__name__)
 
 class PostgresLeadRepository(LeadRepository):
