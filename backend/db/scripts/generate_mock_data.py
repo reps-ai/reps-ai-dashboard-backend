@@ -46,6 +46,9 @@ def create_mock_data():
     try:
         # Start a transaction
         trans = conn.begin()
+
+        # Delete all existing data first
+        delete_all_data(conn)
         
         # Create mock gyms
         print("Creating mock gyms...")
@@ -91,14 +94,15 @@ def create_mock_data():
         print("Creating mock call settings...")
         create_call_settings(conn, gym_ids, branch_ids)
         
-        # Create mock call logs
-        print("Creating mock call logs...")
-        create_call_logs(conn, gym_ids, branch_ids, lead_ids)
-        
-        # Create follow-up campaigns BEFORE follow-up calls
+        # Create follow-up campaigns BEFORE call logs so that valid campaign_ids are available
         print("Creating mock follow-up campaigns...")
         campaign_ids = create_follow_up_campaigns(conn, gym_ids, branch_ids, lead_ids)
         
+        # Create mock call logs with valid campaign_id values
+        print("Creating mock call logs...")
+        create_call_logs(conn, gym_ids, branch_ids, lead_ids, campaign_ids)
+        
+        # Create mock follow-up calls...
         print("Creating mock follow-up calls...")
         create_follow_up_calls(conn, gym_ids, branch_ids, lead_ids, campaign_ids)
         
@@ -444,7 +448,7 @@ def create_voice_settings(conn, gym_ids, branch_ids, n=3):
         """))
     return vs_ids
 
-def create_call_logs(conn, gym_ids, branch_ids, lead_ids, n=10):
+def create_call_logs(conn, gym_ids, branch_ids, lead_ids, campaign_ids, n=10):
     """Create mock call log records."""
     log_ids = []
     for _ in range(n):
@@ -464,10 +468,10 @@ def create_call_logs(conn, gym_ids, branch_ids, lead_ids, n=10):
         transcript = fake.text(max_nb_chars=200)
         summary = fake.text(max_nb_chars=100)
         sentiment = random.choice(["positive", "negative", "neutral"])
-        # campaign_id left NULL for now
+        campaign_id = random.choice(campaign_ids)
         conn.execute(text(f"""
-        INSERT INTO call_logs (id, branch_id, gym_id, lead_id, duration, call_type, human_notes, outcome, call_status, start_time, end_time, recording_url, transcript, summary, sentiment)
-        VALUES ('{log_id}', '{branch_id}', '{gym_id}', '{lead_id}', {duration}, '{call_type}', '{human_notes}', '{outcome}', '{call_status}', '{start_time.strftime("%Y-%m-%d %H:%M:%S")}', '{end_time.strftime("%Y-%m-%d %H:%M:%S")}', '{recording_url}', '{transcript}', '{summary}', '{sentiment}')
+        INSERT INTO call_logs (id, branch_id, gym_id, lead_id, duration, call_type, human_notes, outcome, call_status, start_time, end_time, recording_url, transcript, summary, sentiment, campaign_id)
+        VALUES ('{log_id}', '{branch_id}', '{gym_id}', '{lead_id}', {duration}, '{call_type}', '{human_notes}', '{outcome}', '{call_status}', '{start_time.strftime("%Y-%m-%d %H:%M:%S")}', '{end_time.strftime("%Y-%m-%d %H:%M:%S")}', '{recording_url}', '{transcript}', '{summary}', '{sentiment}', '{campaign_id}' )
         """))
     return log_ids
 
@@ -584,6 +588,34 @@ def create_gym_settings(conn, gym_ids, branch_ids, n=3):
         VALUES ('{gs_id}', '{branch_id}', '{gym_id}', '{name}', '{phone}', '{address}', '{website}', '{email}', '{logo_url}', '{description}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
         """))
     return gs_ids
+
+def delete_all_data(conn):
+    """Delete all data from all tables in the correct order to avoid foreign key conflicts."""
+    print("Deleting existing data...")
+    
+    # Delete in reverse order of dependencies
+    tables = [
+        "lead_tag",
+        "follow_up_calls",
+        "call_logs",
+        "appointments",
+        "follow_up_campaigns",
+        "members",
+        "leads",
+        "knowledge_base",
+        "gym_settings",
+        "call_settings",
+        "voice_settings",
+        "ai_settings",
+        "tags",
+        "users",
+        "branches",
+        "gyms"
+    ]
+    
+    for table in tables:
+        print(f"Deleting data from {table}...")
+        conn.execute(text(f"DELETE FROM {table}"))
 
 if __name__ == "__main__":
     create_mock_data()

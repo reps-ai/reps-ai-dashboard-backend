@@ -33,8 +33,8 @@ class FollowUpCampaign(Base):
     lead = relationship("Lead", back_populates="follow_up_campaigns")
     branch = relationship("Branch", back_populates="follow_up_campaigns")
     gym = relationship("Gym", back_populates="follow_up_campaign")
-    follow_up_calls = relationship("FollowUpCall", back_populates="campaign")
-    call_logs = relationship("CallLog", back_populates="campaign")
+    follow_up_calls = relationship("FollowUpCall", back_populates="follow_up_campaign")
+    call_logs = relationship("CallLog", back_populates="follow_up_campaign")
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
