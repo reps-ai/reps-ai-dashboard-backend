@@ -6,7 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
-
+from sqlalchemy.dialects.postgresql import UUID
 from ..base import Base
 
 class GymSettings(Base):
@@ -14,9 +14,9 @@ class GymSettings(Base):
     
     __tablename__ = "gym_settings"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False, unique=True)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False, unique=True)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
     name = Column(String(255), nullable=False)
     phone = Column(String(20), nullable=False)
     address = Column(String(255), nullable=False)
@@ -26,10 +26,6 @@ class GymSettings(Base):
     description = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
-    
-    # Relationships
-    branch = relationship("Branch", back_populates="gym_settings")
-    gym_id = relationship("Gym", back_populates="gym_settings")
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -46,4 +42,10 @@ class GymSettings(Base):
             "description": self.description,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.gym.branch import Branch
+from backend.db.models.gym.gym import Gym
+
+GymSettings.branch = relationship("Branch", back_populates="gym_settings")
+GymSettings.gym = relationship("Gym", back_populates="gym_settings")

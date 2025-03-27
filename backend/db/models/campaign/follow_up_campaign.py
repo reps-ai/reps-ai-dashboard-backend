@@ -6,6 +6,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
+from sqlalchemy.dialects.postgresql import UUID
 
 from ...base import Base
 
@@ -14,10 +15,10 @@ class FollowUpCampaign(Base):
     
     __tablename__ = "follow_up_campaigns"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     start_date = Column(DateTime, nullable=False)
@@ -32,8 +33,8 @@ class FollowUpCampaign(Base):
     lead = relationship("Lead", back_populates="follow_up_campaigns")
     branch = relationship("Branch", back_populates="follow_up_campaigns")
     gym = relationship("Gym", back_populates="follow_up_campaign")
-    follow_up_calls = relationship("FollowUpCall", back_populates="campaign")
-    call_logs = relationship("CallLog", back_populates="campaign")
+    follow_up_calls = relationship("FollowUpCall", back_populates="follow_up_campaign")
+    call_logs = relationship("CallLog", back_populates="follow_up_campaign")
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -51,4 +52,17 @@ class FollowUpCampaign(Base):
             "campaign_status": self.campaign_status,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+# Import dependent models to ensure registration:
+from backend.db.models.call.call_log import CallLog
+from backend.db.models.lead.lead import Lead
+from backend.db.models.call.follow_up_call import FollowUpCall
+from backend.db.models.gym.gym import Gym
+from backend.db.models.gym.branch import Branch
+
+FollowUpCampaign.call_logs = relationship("CallLog", back_populates="campaign")
+FollowUpCampaign.lead = relationship("Lead", back_populates="follow_up_campaigns")
+FollowUpCampaign.follow_up_calls = relationship("FollowUpCall", back_populates="campaign")
+FollowUpCampaign.gym = relationship("Gym", back_populates="follow_up_campaign")
+FollowUpCampaign.branch = relationship("Branch", back_populates="follow_up_campaigns")

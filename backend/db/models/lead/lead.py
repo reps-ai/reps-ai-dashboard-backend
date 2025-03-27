@@ -7,18 +7,20 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
+from sqlalchemy.dialects.postgresql import UUID
 
 from ..base import Base
+
 
 class Lead(Base):
     """Lead model representing potential gym members."""
     
     __tablename__ = "leads"
-    
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
-    assigned_to_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
+    assigned_to_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=False)
@@ -49,17 +51,6 @@ class Lead(Base):
     preferred_training_type = Column(Text, nullable=True)
     availability = Column(Text, nullable=True)
     medical_conditions = Column(Text, nullable=True)
-    
-    # Relationships
-    branch = relationship("Branch", back_populates="leads")
-    gym = relationship("Gym", back_populates="leads")
-    assigned_to = relationship("User", foreign_keys=[assigned_to_user_id], back_populates="assigned_leads")
-    call_logs = relationship("CallLog", back_populates="lead")
-    appointments = relationship("Appointment", back_populates="lead")
-    member = relationship("Member", back_populates="lead", uselist=False)
-    tags = relationship("Tag", secondary="lead_tag", back_populates="leads")
-    follow_up_calls = relationship("FollowUpCall", back_populates="lead")
-    follow_up_campaigns = relationship("FollowUpCampaign", back_populates="lead")
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -98,4 +89,27 @@ class Lead(Base):
             "preferred_training_type": self.preferred_training_type,
             "availability": self.availability,
             "medical_conditions": self.medical_conditions
-        } 
+        }
+
+# Import dependent models to ensure registration
+from backend.db.models.gym.branch import Branch
+from backend.db.models.gym.gym import Gym
+from backend.db.models.user import User
+from backend.db.models.call.call_log import CallLog
+from backend.db.models.appointment import Appointment
+from backend.db.models.member import Member
+from backend.db.models.lead.tag import Tag
+from backend.db.models.call.follow_up_call import FollowUpCall
+from backend.db.models.campaign.follow_up_campaign import FollowUpCampaign
+
+
+# Define relationships AFTER the class is defined:
+Lead.branch = relationship("Branch", back_populates="leads")
+Lead.gym = relationship("Gym", back_populates="leads")
+Lead.assigned_to = relationship("User", foreign_keys=[Lead.assigned_to_user_id], back_populates="assigned_leads")
+Lead.call_logs = relationship("CallLog", back_populates="lead")
+Lead.appointments = relationship("Appointment", back_populates="lead")
+Lead.member = relationship("Member", back_populates="lead", uselist=False)
+Lead.tags = relationship("Tag", secondary="lead_tag", back_populates="leads")
+Lead.follow_up_calls = relationship("FollowUpCall", back_populates="lead")
+Lead.follow_up_campaigns = relationship("FollowUpCampaign", back_populates="lead")

@@ -26,10 +26,6 @@ class AISettings(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    gym = relationship("Gym", back_populates="ai_settings")
-    branch = relationship("Branch", back_populates="ai_settings")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -44,4 +40,10 @@ class AISettings(Base):
             "escalation_threshold": self.escalation_threshold,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.gym.gym import Gym
+from backend.db.models.gym.branch import Branch
+
+AISettings.gym = relationship("Gym", back_populates="ai_settings")
+AISettings.branch = relationship("Branch", back_populates="ai_settings")

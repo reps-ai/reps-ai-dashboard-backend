@@ -1,8 +1,8 @@
-"""add all the tables
+"""reset the db and changed data type to uuid for id cols
 
-Revision ID: f8ee171b772e
-Revises: 553b8b8906f8
-Create Date: 2025-03-20 07:08:46.969132
+Revision ID: 2a0e4474110d
+Revises: 
+Create Date: 2025-03-25 11:43:49.420547
 
 """
 from alembic import op
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = 'f8ee171b772e'
-down_revision = '553b8b8906f8'
+revision = '2a0e4474110d'
+down_revision = None
 branch_labels = None
 depends_on = None
 
@@ -27,7 +27,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('tags',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('color', sa.String(length=20), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -35,7 +35,7 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('branches',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=True),
     sa.Column('name', sa.String(length=255), nullable=False),
     sa.Column('address', sa.Text(), nullable=True),
@@ -48,9 +48,9 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('ai_settings',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('personality', sa.String(length=100), nullable=False),
     sa.Column('agent_name', sa.String(length=100), nullable=False),
     sa.Column('greeting', sa.String(length=255), nullable=True),
@@ -65,8 +65,8 @@ def upgrade() -> None:
     sa.UniqueConstraint('branch_id')
     )
     op.create_table('call_settings',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('max_duration', sa.Integer(), nullable=True),
     sa.Column('call_hours_start', sa.String(length=10), nullable=True),
@@ -83,8 +83,9 @@ def upgrade() -> None:
     sa.UniqueConstraint('branch_id')
     )
     op.create_table('gym_settings',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('name', sa.String(length=255), nullable=False),
     sa.Column('phone', sa.String(length=20), nullable=False),
     sa.Column('address', sa.String(length=255), nullable=False),
@@ -95,12 +96,13 @@ def upgrade() -> None:
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['branch_id'], ['branches.id'], ),
+    sa.ForeignKeyConstraint(['gym_id'], ['gyms.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('branch_id')
     )
     op.create_table('knowledge_base',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('pdf_url', sa.String(length=255), nullable=True),
     sa.Column('question', sa.Text(), nullable=True),
@@ -113,9 +115,9 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('users',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=True),
+    sa.Column('branch_id',postgresql.UUID(as_uuid=True), nullable=True),
     sa.Column('username', sa.String(length=100), nullable=False),
     sa.Column('password_hash', sa.String(length=255), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
@@ -134,9 +136,9 @@ def upgrade() -> None:
     sa.UniqueConstraint('username')
     )
     op.create_table('voice_settings',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('voice_type', sa.String(length=100), nullable=False),
     sa.Column('speaking_speed', sa.String(length=50), nullable=True),
     sa.Column('volume', sa.String(length=50), nullable=True),
@@ -149,10 +151,10 @@ def upgrade() -> None:
     sa.UniqueConstraint('branch_id')
     )
     op.create_table('leads',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('assigned_to_user_id', sa.String(length=36), nullable=True),
+    sa.Column('assigned_to_user_id', postgresql.UUID(as_uuid=True), nullable=True),
     sa.Column('first_name', sa.String(length=100), nullable=False),
     sa.Column('last_name', sa.String(length=100), nullable=False),
     sa.Column('phone', sa.String(length=20), nullable=False),
@@ -189,18 +191,18 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('user_branch',
-    sa.Column('user_id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.ForeignKeyConstraint(['branch_id'], ['branches.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('user_id', 'branch_id')
     )
     op.create_table('appointments',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('lead_id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
-    sa.Column('employee_user_id', sa.String(length=36), nullable=True),
+    sa.Column('lead_id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('employee_user_id', postgresql.UUID(as_uuid=True), nullable=True),
     sa.Column('appointment_type', sa.String(length=100), nullable=False),
     sa.Column('appointment_date', sa.DateTime(), nullable=False),
     sa.Column('duration', sa.Integer(), nullable=True),
@@ -208,7 +210,7 @@ def upgrade() -> None:
     sa.Column('notes', sa.Text(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.TIMESTAMP(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.Column('created_by_user_id', sa.String(length=36), nullable=True),
+    sa.Column('created_by_user_id', postgresql.UUID(as_uuid=True), nullable=True),
     sa.Column('reminder_sent', sa.Boolean(), nullable=False),
     sa.Column('employee_name', sa.String(length=255), nullable=True),
     sa.ForeignKeyConstraint(['branch_id'], ['branches.id'], ),
@@ -219,10 +221,10 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('follow_up_campaigns',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('lead_id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('lead_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('name', sa.String(length=255), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('start_date', sa.DateTime(), nullable=False),
@@ -238,18 +240,18 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('lead_tag',
-    sa.Column('lead_id', sa.String(length=36), nullable=False),
-    sa.Column('tag_id', sa.String(length=36), nullable=False),
+    sa.Column('lead_id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('tag_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['lead_id'], ['leads.id'], ),
     sa.ForeignKeyConstraint(['tag_id'], ['tags.id'], ),
     sa.PrimaryKeyConstraint('lead_id', 'tag_id')
     )
     op.create_table('members',
-    sa.Column('id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('lead_id', sa.String(length=36), nullable=True),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('lead_id', postgresql.UUID(as_uuid=True), nullable=True),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('membership_start_date', sa.DateTime(), nullable=False),
     sa.Column('membership_type', sa.String(length=100), nullable=False),
     sa.Column('membership_status', sa.String(length=50), nullable=False),
@@ -262,10 +264,10 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('call_logs',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('lead_id', sa.String(length=36), nullable=False),
+    sa.Column('lead_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('duration', sa.Integer(), nullable=True),
     sa.Column('call_type', sa.String(length=50), nullable=False),
     sa.Column('human_notes', sa.Text(), nullable=True),
@@ -279,7 +281,7 @@ def upgrade() -> None:
     sa.Column('transcript', sa.Text(), nullable=True),
     sa.Column('summary', sa.Text(), nullable=True),
     sa.Column('sentiment', sa.String(length=50), nullable=True),
-    sa.Column('campaign_id', sa.String(length=36), nullable=True),
+    sa.Column('campaign_id', postgresql.UUID(as_uuid=True) , nullable=True),
     sa.ForeignKeyConstraint(['branch_id'], ['branches.id'], ),
     sa.ForeignKeyConstraint(['campaign_id'], ['follow_up_campaigns.id'], ),
     sa.ForeignKeyConstraint(['gym_id'], ['gyms.id'], ),
@@ -287,11 +289,11 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('follow_up_calls',
-    sa.Column('id', sa.String(length=36), nullable=False),
-    sa.Column('lead_id', sa.String(length=36), nullable=False),
-    sa.Column('branch_id', sa.String(length=36), nullable=False),
+    sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('lead_id', postgresql.UUID(as_uuid=True), nullable=False),
+    sa.Column('branch_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('gym_id', postgresql.UUID(as_uuid=True), nullable=False),
-    sa.Column('campaign_id', sa.String(length=36), nullable=False),
+    sa.Column('campaign_id', postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column('number_of_calls', sa.Integer(), nullable=True),
     sa.Column('call_date_time', sa.DateTime(), nullable=False),
     sa.Column('duration', sa.Integer(), nullable=True),

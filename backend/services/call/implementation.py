@@ -3,10 +3,13 @@ Implementation of the Call Management Service.
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import json
 
 from .interface import CallService
 from ...db.repositories.call import CallRepository
 from ...utils.logging.logger import get_logger
+from ...integrations.retell.interface import RetellIntegration
+from ...db.models.call.call_log import CallLog  # Import the CallLog model for type hints
 
 logger = get_logger(__name__)
 
@@ -15,31 +18,53 @@ class DefaultCallService(CallService):
     Default implementation of the Call Management Service.
     """
     
-    def __init__(self, call_repository: CallRepository):
+    def __init__(self, call_repository: CallRepository, retell_integration: RetellIntegration = None):
         """
         Initialize the call service.
         
         Args:
             call_repository: Repository for call operations
+            retell_integration: Optional Retell integration service
         """
         self.call_repository = call_repository
+        self.retell_integration = retell_integration
     
-    async def trigger_call(self, lead_id: str, campaign_id: Optional[str] = None) -> Dict[str, Any]:
+    #Aditya
+    async def trigger_call(self, lead_id: str, campaign_id: Optional[str] = None, lead_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Trigger a call to a lead.
         
         Args:
             lead_id: ID of the lead to call
             campaign_id: Optional ID of the campaign
+            lead_data: Optional pre-loaded lead data
             
         Returns:
             Dictionary containing call details
         """
         logger.info(f"Triggering call to lead: {lead_id}")
         
-        # Create call data
+        # Get lead data if not provided
+        if not lead_data:
+            # In a real implementation, fetch lead data from the repository
+            # Example: lead_data = await lead_repository.get_lead_by_id(lead_id)
+            
+            # For now, create a placeholder with minimal required data
+            # You should replace this with actual lead data retrieval
+            lead_data = {
+                "id": lead_id,
+                "phone_number": "PLACEHOLDER-PHONE-NUMBER",  # Replace with actual phone number
+                "name": "Placeholder Name",  # Replace with actual name
+                "gym_id": "PLACEHOLDER-GYM-ID",  # Replace with actual gym ID
+                "branch_id": "PLACEHOLDER-BRANCH-ID",  # Replace with actual branch ID
+                "interest": "PLACEHOLDER-INTEREST"  # Replace with actual interest
+            }
+        
+        # Create initial call log entry in database
         call_data = {
             "lead_id": lead_id,
+            "gym_id": lead_data.get("gym_id"),
+            "branch_id": lead_data.get("branch_id"),
             "call_status": "scheduled",
             "call_type": "outbound",
             "created_at": datetime.now(),
@@ -49,11 +74,59 @@ class DefaultCallService(CallService):
         if campaign_id:
             call_data["campaign_id"] = campaign_id
         
-        # Create call using repository
-        call = await self.call_repository.create_call(call_data)
+        # Create call using repository (initial database entry)
+        db_call = await self.call_repository.create_call(call_data)
+        logger.info(f"Created initial call record with ID: {db_call.get('id')}")
         
-        logger.info(f"Triggered call with ID: {call.get('id')}")
-        return call
+        # If Retell integration is available, use it to make the call
+        if self.retell_integration:
+            try:
+                # Set max duration if needed (could be based on campaign settings)
+                max_duration = None
+                
+                # Make the actual call using Retell
+                retell_call_result = await self.retell_integration.create_call(
+                    lead_data=lead_data,
+                    campaign_id=campaign_id,
+                    max_duration=max_duration
+                )
+                
+                if retell_call_result.get("status") == "error":
+                    # Handle error from Retell
+                    logger.error(f"Error from Retell: {retell_call_result.get('message')}")
+                    error_update = {
+                        "call_status": "error"
+                    }
+                    error_call = await self.call_repository.update_call(db_call["id"], error_update)
+                    return error_call
+                
+                # Update the call data with Retell specific information
+                update_data = {
+                    "call_status": retell_call_result.get("call_status", "scheduled"),
+                    "external_call_id": retell_call_result.get("call_id")
+                }
+                
+                # Update the call in our database
+                updated_call = await self.call_repository.update_call(db_call["id"], update_data)
+                
+                # Return the updated call
+                logger.info(f"Triggered call with Retell, call ID: {db_call.get('id')}, external ID: {retell_call_result.get('call_id')}")
+                return updated_call
+                
+            except Exception as e:
+                # Handle any errors from the Retell integration
+                logger.error(f"Error triggering call with Retell: {str(e)}")
+                
+                # Update call status to error
+                error_update = {
+                    "call_status": "error"
+                }
+                
+                error_call = await self.call_repository.update_call(db_call["id"], error_update)
+                return error_call
+        
+        logger.info(f"Triggered call with ID: {db_call.get('id')} (no Retell integration used)")
+        return db_call
     
     async def get_call(self, call_id: str) -> Dict[str, Any]:
         """
@@ -73,8 +146,10 @@ class DefaultCallService(CallService):
             raise ValueError(f"Call with ID {call_id} not found")
         
         return call
-      
-    async def get_calls_by_campaign(self, campaign_id: str) -> List[Dict[str, Any]]:
+    
+    async def get_calls_by_campaign(self, campaign_id: str,
+        page: int = 1,
+        page_size: int = 50) -> List[Dict[str, Any]]:
         """
         Get calls for a campaign.
         
@@ -87,11 +162,13 @@ class DefaultCallService(CallService):
         logger.info(f"Getting calls for campaign: {campaign_id}")
         
         # Get calls using repository
-        calls_result = await self.call_repository.get_calls_by_campaign(campaign_id)
+        calls_result = await self.call_repository.get_calls_by_campaign(campaign_id,page,page_size)
         
         return calls_result.get("calls", [])
     
-    async def get_calls_by_lead(self, lead_id: str) -> List[Dict[str, Any]]:
+    async def get_calls_by_lead(self, lead_id: str,
+        page: int = 1,
+        page_size: int = 50) -> List[Dict[str, Any]]:
         """
         Get calls for a lead.
         
@@ -104,7 +181,7 @@ class DefaultCallService(CallService):
         logger.info(f"Getting calls for lead: {lead_id}")
         
         # Get calls using repository
-        calls_result = await self.call_repository.get_calls_by_lead(lead_id)
+        calls_result = await self.call_repository.get_calls_by_lead(lead_id,page,page_size)
         
         return calls_result.get("calls", [])
     
@@ -112,7 +189,9 @@ class DefaultCallService(CallService):
         self, 
         gym_id: str, 
         start_date: datetime, 
-        end_date: datetime
+        end_date: datetime,
+        page: int = 1,
+        page_size: int = 50
     ) -> List[Dict[str, Any]]:
         """
         Get calls for a gym within a date range.
@@ -129,11 +208,14 @@ class DefaultCallService(CallService):
         
         # Get calls using repository
         calls_result = await self.call_repository.get_calls_by_date_range(
-            gym_id, start_date, end_date
+            gym_id, start_date, end_date, page, page_size
         )
         
         return calls_result.get("calls", [])
     
+
+    """Optional Beyond This point."""
+    #Optional
     async def process_webhook_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a webhook event from the call provider.
@@ -144,8 +226,88 @@ class DefaultCallService(CallService):
         Returns:
             Dictionary containing the processed event result
         """
-        logger.info(f"Processing webhook event: {event_data.get('event_type')}")
+        logger.info(f"Processing webhook event: {event_data.get('event_type') or event_data.get('event')}")
         
+        # If we have the Retell integration and this is a Retell webhook, process it
+        if self.retell_integration and event_data.get("source") == "retell":
+            try:
+                # Process the webhook using the Retell integration
+                processed_webhook = await self.retell_integration.process_webhook(event_data)
+                
+                # Get the mapped event type and call ID
+                event_type = processed_webhook.get("event_type")
+                external_call_id = processed_webhook.get("call_id")
+                
+                if not external_call_id:
+                    logger.warning("No call ID provided in webhook event")
+                    return {
+                        "status": "error",
+                        "message": "No call ID provided in webhook event",
+                        "processed_webhook": processed_webhook
+                    }
+                
+                # Find our internal call with this external call ID
+                call = await self.call_repository.get_call_by_external_id(external_call_id)
+                
+                if not call:
+                    logger.warning(f"Call with external ID {external_call_id} not found")
+                    return {
+                        "status": "error",
+                        "message": f"Call with external ID {external_call_id} not found",
+                        "processed_webhook": processed_webhook
+                    }
+                
+                call_id = call.get("id")
+                
+                # Process the event based on type
+                if event_type == "call.started":
+                    # Update call status to in_progress
+                    update_data = {
+                        "call_status": "in_progress",
+                        "start_time": datetime.fromtimestamp(processed_webhook.get("timestamp", 0) / 1000) if processed_webhook.get("timestamp") else datetime.now()
+                    }
+                    updated_call = await self.call_repository.update_call(call_id, update_data)
+                    return {"status": "success", "call": updated_call}
+                
+                elif event_type == "call.ended":
+                    # Update call with transcript, recording, and status
+                    transcript = processed_webhook.get("transcript")
+                    recording_url = processed_webhook.get("recording_url")
+                    duration = processed_webhook.get("duration", 0)
+                    
+                    # Update call record
+                    update_data = {
+                        "call_status": "completed",
+                        "end_time": datetime.fromtimestamp(processed_webhook.get("timestamp", 0) / 1000) if processed_webhook.get("timestamp") else datetime.now(),
+                        "duration": duration,
+                        "recording_url": recording_url,
+                        "transcript": transcript
+                    }
+                    updated_call = await self.call_repository.update_call(call_id, update_data)
+                    return {"status": "success", "call": updated_call}
+                
+                elif event_type == "call.analyzed":
+                    # Update call with analysis data
+                    summary = processed_webhook.get("summary")
+                    sentiment = processed_webhook.get("sentiment")
+                    
+                    update_data = {
+                        "summary": summary,
+                        "sentiment": sentiment
+                    }
+                    
+                    updated_call = await self.call_repository.update_call(call_id, update_data)
+                    return {"status": "success", "call": updated_call}
+                
+                else:
+                    logger.warning(f"Unknown event type from Retell: {event_type}")
+                    return {"status": "error", "message": f"Unknown event type: {event_type}"}
+                
+            except Exception as e:
+                logger.error(f"Error processing Retell webhook: {str(e)}")
+                return {"status": "error", "message": str(e)}
+        
+        # Regular webhook processing (non-Retell or fallback)
         event_type = event_data.get("event_type")
         call_id = event_data.get("call_id")
         
@@ -188,7 +350,7 @@ class DefaultCallService(CallService):
                 logger.warning("No recording URL provided in webhook event")
                 raise ValueError("No recording URL provided in webhook event")
             
-            updated_call = await self.call_repository.update_call_recording(call_id, recording_url)
+            updated_call = await self.call_repository.update_call(call_id, {"recording_url": recording_url})
             return {"status": "success", "call": updated_call}
         
         elif event_type == "call.transcript":
@@ -198,7 +360,7 @@ class DefaultCallService(CallService):
                 logger.warning("No transcript provided in webhook event")
                 raise ValueError("No transcript provided in webhook event")
             
-            updated_call = await self.call_repository.update_call_transcript(call_id, transcript)
+            updated_call = await self.call_repository.update_call(call_id, {"transcript": transcript})
             return {"status": "success", "call": updated_call}
         
         else:
@@ -207,9 +369,6 @@ class DefaultCallService(CallService):
     
 
 
-
-
-    
     #Optional.
     async def create_follow_up_call(self, follow_up_call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -337,7 +496,7 @@ class DefaultCallService(CallService):
         # Get follow-up calls using repository
         follow_up_calls_result = await self.call_repository.get_follow_up_calls_by_lead(lead_id)
         
-        return follow_up_calls_result.get("follow_up_calls", []) 
+        return follow_up_calls_result.get("follow_up_calls", [])
     
 
     #Optional. 

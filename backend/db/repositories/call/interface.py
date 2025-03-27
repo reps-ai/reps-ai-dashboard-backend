@@ -35,6 +35,19 @@ class CallRepository(ABC):
         pass
     
     @abstractmethod
+    async def get_call_by_external_id(self, external_call_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a call by external call ID.
+        
+        Args:
+            external_call_id: External ID of the call (e.g., from Retell)
+        
+        Returns:
+            Dictionary containing call data, or None if not found
+        """
+        pass
+    
+    @abstractmethod
     async def update_call(self, call_id: str, call_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Update call details.

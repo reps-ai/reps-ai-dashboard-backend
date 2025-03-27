@@ -14,10 +14,12 @@ from ...models.call.call_log import CallLog
 from ...models.campaign.follow_up_campaign import FollowUpCampaign
 from ...models.member import Member
 from ...models.call.follow_up_call import FollowUpCall
+from ...models.gym.branch import Branch
 from ....utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
+#Tested Works
 async def get_lead_with_related_data(session: AsyncSession, lead_id: str) -> Optional[Dict[str, Any]]:
     """
     Get a lead with all related data.
@@ -66,6 +68,7 @@ async def get_lead_with_related_data(session: AsyncSession, lead_id: str) -> Opt
     
     return lead_dict
 
+#Tested Works
 async def create_lead_db(
     session: AsyncSession,
     lead_data: Dict[str, Any]
@@ -89,6 +92,7 @@ async def create_lead_db(
     
     return await get_lead_with_related_data(session, lead.id)
 
+#Tested Works
 async def update_lead_db(
     session: AsyncSession,
     lead_id: str,
@@ -120,6 +124,7 @@ async def update_lead_db(
     
     return await get_lead_with_related_data(session, lead_id)
 
+#Tested Works
 async def delete_lead_db(
     session: AsyncSession,
     lead_id: str
@@ -401,6 +406,7 @@ def build_lead_filters(base_query, filters: Dict[str, Any]):
     
     return base_query
 
+#Tested Works
 async def get_leads_by_gym_with_filters(
     session: AsyncSession,
     branch_id: str,
@@ -420,50 +426,76 @@ async def get_leads_by_gym_with_filters(
         
     Returns:
         Dictionary containing leads and pagination info
+    
+    Raises:
+        ValueError: If invalid parameters are provided
+        Exception: For database or other errors
     """
-    # Start with base query
-    base_query = (
-        select(Lead)
-        .outerjoin(Lead.tags)  # Explicit join for relationships
-        .outerjoin(Lead.call_logs)
-        .outerjoin(Lead.appointments)
-        .where(Lead.branch_id == branch_id)
-        .group_by(Lead.id)
-    )
-    
-    # Apply filters
-    if filters:
-        base_query = build_lead_filters(base_query, filters)
-    
-    # Count total
-    count_query = select(func.count()).select_from(base_query.subquery())
-    total_count = await session.execute(count_query)
-    total = total_count.scalar_one()
-    
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = base_query.order_by(desc(Lead.created_at)).offset(offset).limit(page_size)
-    
-    # Execute query
-    result = await session.execute(query)
-    leads = result.scalars().all()
-    
-    # Get full lead data
-    lead_data = []
-    for lead in leads:
-        lead_data.append(await get_lead_with_related_data(session, lead.id))
-    
-    return {
-        "leads": lead_data,
-        "pagination": {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "pages": (total + page_size - 1) // page_size
+    try:
+        # Validate inputs
+        if not branch_id:
+            raise ValueError("Branch ID is required")
+        
+        if page < 1:
+            raise ValueError("Page number must be at least 1")
+        
+        if page_size < 1:
+            raise ValueError("Page size must be at least 1")
+        
+        # Start with base query
+        base_query = (
+            select(Lead)
+            .outerjoin(Lead.tags)  # Explicit join for relationships
+            .outerjoin(Lead.call_logs)
+            .outerjoin(Lead.appointments)
+            .where(Lead.branch_id == branch_id)
+            .group_by(Lead.id)
+        )
+        
+        # Apply filters
+        if filters:
+            try:
+                base_query = build_lead_filters(base_query, filters)
+            except Exception as e:
+                raise ValueError(f"Invalid filter parameters: {str(e)}")
+        
+        # Count total
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_count = await session.execute(count_query)
+        total = total_count.scalar_one()
+        
+        # Apply pagination
+        offset = (page - 1) * page_size
+        query = base_query.order_by(desc(Lead.created_at)).offset(offset).limit(page_size)
+        
+        # Execute query
+        result = await session.execute(query)
+        leads = result.scalars().all()
+        
+        # Get full lead data
+        lead_data = []
+        for lead in leads:
+            lead_data.append(await get_lead_with_related_data(session, lead.id))
+        
+        return {
+            "leads": lead_data,
+            "pagination": {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "pages": (total + page_size - 1) // page_size
+            }
         }
-    }
+    except ValueError as ve:
+        # Re-raise validation errors
+        raise
+    except Exception as e:
+        # Log and re-raise other errors
+        logger.error(f"Error fetching leads for branch {branch_id}: {str(e)}")
+        raise Exception(f"Failed to retrieve leads: {str(e)}")
 
 async def update_lead_after_call_db(
+    
     session: AsyncSession,
     lead_id: str,
     call_data: Dict[str, Any]
@@ -576,7 +608,7 @@ async def update_lead_after_call_db(
     
     # Get updated lead data
     return await get_lead_with_related_data(session, lead_id)
-
+#No errors
 async def get_prioritized_leads_db(
     session: AsyncSession,
     branch_id: str,

@@ -65,12 +65,12 @@ class LeadRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_leads_by_gym(self, gym_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def get_leads_by_branch(self, branch_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Get all leads for a gym with optional filters.
 
         Args:
-            gym_id: Unique identifier of the gym
+            branch_id: Unique identifier of the branch
             filters: Optional dictionary of filter criteria
 
         Returns:
@@ -151,7 +151,7 @@ class LeadRepository(ABC):
     @abstractmethod
     async def get_prioritized_leads(
         self, 
-        gym_id: str, 
+        branch_id: str, 
         count: int, 
         qualification: Optional[str] = None,
         exclude_leads: Optional[List[str]] = None
@@ -160,7 +160,7 @@ class LeadRepository(ABC):
         Get prioritized leads for campaigns.
 
         Args:
-            gym_id: Unique identifier of the gym
+            branch_id: Unique identifier of the branch
             count: Number of leads to return
             qualification: Optional qualification status to filter by
             exclude_leads: Optional list of lead IDs to exclude

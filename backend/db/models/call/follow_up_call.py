@@ -7,7 +7,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql.sqltypes import TIMESTAMP
 from sqlalchemy.sql.expression import text
 from uuid import uuid4
-
+from sqlalchemy.dialects.postgresql import UUID
 from ..base import Base
 
 class FollowUpCall(Base):
@@ -15,11 +15,11 @@ class FollowUpCall(Base):
     
     __tablename__ = "follow_up_calls"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    lead_id = Column(String(36), ForeignKey("leads.id"), nullable=False)
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=False)
-    gym_id = Column(String(36), ForeignKey("gyms.id"), nullable=False)
-    campaign_id = Column(String(36), ForeignKey("follow_up_campaigns.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    lead_id = Column(UUID(as_uuid=True), ForeignKey("leads.id"), nullable=False)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("follow_up_campaigns.id"), nullable=False)
     number_of_calls = Column(Integer, nullable=True)
     call_date_time = Column(DateTime, nullable=False)
     duration = Column(Integer, nullable=True)  # in seconds
@@ -33,12 +33,6 @@ class FollowUpCall(Base):
     sentiment = Column(String(50), nullable=True)  # positive, negative, neutral
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
-    
-    # Relationships
-    lead = relationship("Lead", back_populates="follow_up_calls")
-    campaign = relationship("FollowUpCampaign", back_populates="follow_up_calls")
-    branch = relationship("Branch", back_populates="follow_up_calls")
-    gym = relationship("Gym", back_populates="follow_up_calls")
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -61,4 +55,14 @@ class FollowUpCall(Base):
             "sentiment": self.sentiment,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.lead.lead import Lead
+from backend.db.models.campaign.follow_up_campaign import FollowUpCampaign
+from backend.db.models.gym.branch import Branch
+from backend.db.models.gym.gym import Gym
+
+FollowUpCall.lead = relationship("Lead", back_populates="follow_up_calls")
+FollowUpCall.campaign = relationship("FollowUpCampaign", back_populates="follow_up_calls")
+FollowUpCall.branch = relationship("Branch", back_populates="follow_up_calls")
+FollowUpCall.gym = relationship("Gym", back_populates="follow_up_calls")

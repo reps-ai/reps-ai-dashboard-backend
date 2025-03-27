@@ -38,16 +38,6 @@ class User(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
-    gym = relationship("Gym", back_populates="users")
-    branch = relationship("Branch", back_populates="users")
-    assigned_leads = relationship("Lead", foreign_keys="Lead.assigned_to_user_id", back_populates="assigned_to")
-    call_logs = relationship("CallLog", foreign_keys="CallLog.agent_user_id", back_populates="agent")
-    appointments_as_employee = relationship("Appointment", foreign_keys="Appointment.employee_user_id", back_populates="employee")
-    appointments_created = relationship("Appointment", foreign_keys="Appointment.created_by_user_id", back_populates="created_by")
-    follow_up_calls = relationship("FollowUpCall", foreign_keys="FollowUpCall.agent_user_id", back_populates="agent")
-    branches = relationship("Branch", secondary=user_branch, back_populates="users")
-    
     def to_dict(self):
         """Convert the model instance to a dictionary."""
         return {
@@ -64,4 +54,18 @@ class User(Base):
             "is_active": self.is_active,
             "created_at": self.created_at,
             "updated_at": self.updated_at
-        } 
+        }
+
+from backend.db.models.gym.gym import Gym
+from backend.db.models.gym.branch import Branch
+from backend.db.models.lead.lead import Lead
+from backend.db.models.call.call_log import CallLog
+from backend.db.models.appointment import Appointment
+from backend.db.models.call.follow_up_call import FollowUpCall
+
+User.gym = relationship("Gym", back_populates="users")
+User.branch = relationship("Branch", back_populates="users")
+User.assigned_leads = relationship("Lead", foreign_keys="Lead.assigned_to_user_id", back_populates="assigned_to")
+User.appointments_as_employee = relationship("Appointment", foreign_keys="Appointment.employee_user_id", back_populates="employee")
+User.appointments_created = relationship("Appointment", foreign_keys="Appointment.created_by_user_id", back_populates="created_by")
+User.branches = relationship("Branch", secondary=user_branch, back_populates="users")
