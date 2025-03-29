@@ -256,7 +256,7 @@ class CallRepository(ABC):
     @abstractmethod
     async def get_calls_by_outcome(
         self,
-        gym_id: str,
+        branch_id: str,  # Changed from gym_id to branch_id to match implementation
         outcome: str,
         page: int = 1,
         page_size: int = 50
@@ -265,7 +265,7 @@ class CallRepository(ABC):
         Get calls by outcome.
         
         Args:
-            gym_id: Unique identifier of the gym
+            branch_id: Unique identifier of the branch  # Updated param name in docstring
             outcome: Outcome to filter by
             page: Page number
             page_size: Page size
@@ -273,4 +273,36 @@ class CallRepository(ABC):
         Returns:
             Dictionary containing calls and pagination info
         """
-        pass 
+        pass
+    
+    @abstractmethod
+    async def get_calls_with_filters(
+        self,
+        gym_id: str,
+        page: int = 1,
+        page_size: int = 50,
+        lead_id: Optional[str] = None,
+        campaign_id: Optional[str] = None,
+        direction: Optional[str] = None,
+        outcome: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Get calls with combined filtering at the database level.
+        
+        Args:
+            gym_id: ID of the gym (required for security)
+            page: Page number
+            page_size: Page size
+            lead_id: Optional lead ID to filter by
+            campaign_id: Optional campaign ID to filter by
+            direction: Optional call direction to filter by (inbound/outbound)
+            outcome: Optional outcome to filter by
+            start_date: Optional start date for date range filtering
+            end_date: Optional end date for date range filtering
+            
+        Returns:
+            Dictionary containing calls and pagination info
+        """
+        pass
