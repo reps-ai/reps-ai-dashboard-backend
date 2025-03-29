@@ -41,149 +41,179 @@ class DefaultCallService(CallService):
             
         Returns:
             Dictionary containing call details
-        """
-        logger.info(f"Triggering call to lead: {lead_id}")
-        
-        # Get lead data if not provided
-        if not lead_data:
-            # In a real implementation, fetch lead data from the repository
-            # Example: lead_data = await lead_repository.get_lead_by_id(lead_id)
             
-            # For now, create a placeholder with minimal required data
-            # You should replace this with actual lead data retrieval
-            lead_data = {
-                "id": lead_id,
-                "phone_number": "PLACEHOLDER-PHONE-NUMBER",  # Replace with actual phone number
-                "name": "Placeholder Name",  # Replace with actual name
-                "gym_id": "PLACEHOLDER-GYM-ID",  # Replace with actual gym ID
-                "branch_id": "PLACEHOLDER-BRANCH-ID",  # Replace with actual branch ID
-                "interest": "PLACEHOLDER-INTEREST"  # Replace with actual interest
+        Raises:
+            ValueError: If there's an error triggering the call
+        """
+        try:
+            logger.info(f"Triggering call to lead: {lead_id}")
+            
+            # Get lead data if not provided
+            if not lead_data:
+                # In a real implementation, fetch lead data from the repository
+                # Example: lead_data = await lead_repository.get_lead_by_id(lead_id)
+                
+                # For now, create a placeholder with minimal required data
+                # You should replace this with actual lead data retrieval
+                lead_data = {
+                    "id": lead_id,
+                    "phone_number": "PLACEHOLDER-PHONE-NUMBER",  # Replace with actual phone number
+                    "name": "Placeholder Name",  # Replace with actual name
+                    "gym_id": "PLACEHOLDER-GYM-ID",  # Replace with actual gym ID
+                    "branch_id": "PLACEHOLDER-BRANCH-ID",  # Replace with actual branch ID
+                    "interest": "PLACEHOLDER-INTEREST"  # Replace with actual interest
+                }
+            
+            # Create initial call log entry in database
+            call_data = {
+                "lead_id": lead_id,
+                "gym_id": lead_data.get("gym_id"),
+                "branch_id": lead_data.get("branch_id"),
+                "call_status": "scheduled",
+                "call_type": "outbound",
+                "created_at": datetime.now(),
+                "start_time": datetime.now()
             }
-        
-        # Create initial call log entry in database
-        call_data = {
-            "lead_id": lead_id,
-            "gym_id": lead_data.get("gym_id"),
-            "branch_id": lead_data.get("branch_id"),
-            "call_status": "scheduled",
-            "call_type": "outbound",
-            "created_at": datetime.now(),
-            "start_time": datetime.now()
-        }
-        
-        if campaign_id:
-            call_data["campaign_id"] = campaign_id
-        
-        # Create call using repository (initial database entry)
-        db_call = await self.call_repository.create_call(call_data)
-        logger.info(f"Created initial call record with ID: {db_call.get('id')}")
-        
-        # If Retell integration is available, use it to make the call
-        if self.retell_integration:
-            try:
-                # Set max duration if needed (could be based on campaign settings)
-                max_duration = None
-                
-                # Make the actual call using Retell
-                retell_call_result = await self.retell_integration.create_call(
-                    lead_data=lead_data,
-                    campaign_id=campaign_id,
-                    max_duration=max_duration
-                )
-                
-                if retell_call_result.get("status") == "error":
-                    # Handle error from Retell
-                    logger.error(f"Error from Retell: {retell_call_result.get('message')}")
+            
+            if campaign_id:
+                call_data["campaign_id"] = campaign_id
+            
+            # Create call using repository (initial database entry)
+            db_call = await self.call_repository.create_call(call_data)
+            logger.info(f"Created initial call record with ID: {db_call.get('id')}")
+            
+            # If Retell integration is available, use it to make the call
+            if self.retell_integration:
+                try:
+                    # Set max duration if needed (could be based on campaign settings)
+                    max_duration = None
+                    
+                    # Make the actual call using Retell
+                    retell_call_result = await self.retell_integration.create_call(
+                        lead_data=lead_data,
+                        campaign_id=campaign_id,
+                        max_duration=max_duration
+                    )
+                    
+                    if retell_call_result.get("status") == "error":
+                        # Handle error from Retell
+                        logger.error(f"Error from Retell: {retell_call_result.get('message')}")
+                        error_update = {
+                            "call_status": "error"
+                        }
+                        error_call = await self.call_repository.update_call(db_call["id"], error_update)
+                        return error_call
+                    
+                    # Update the call data with Retell specific information
+                    update_data = {
+                        "call_status": retell_call_result.get("call_status", "scheduled"),
+                        "external_call_id": retell_call_result.get("call_id")
+                    }
+                    
+                    # Update the call in our database
+                    updated_call = await self.call_repository.update_call(db_call["id"], update_data)
+                    
+                    # Return the updated call
+                    logger.info(f"Triggered call with Retell, call ID: {db_call.get('id')}, external ID: {retell_call_result.get('call_id')}")
+                    return updated_call
+                    
+                except Exception as e:
+                    # Handle any errors from the Retell integration
+                    logger.error(f"Error triggering call with Retell: {str(e)}")
+                    
+                    # Update call status to error
                     error_update = {
                         "call_status": "error"
                     }
+                    
                     error_call = await self.call_repository.update_call(db_call["id"], error_update)
                     return error_call
-                
-                # Update the call data with Retell specific information
-                update_data = {
-                    "call_status": retell_call_result.get("call_status", "scheduled"),
-                    "external_call_id": retell_call_result.get("call_id")
-                }
-                
-                # Update the call in our database
-                updated_call = await self.call_repository.update_call(db_call["id"], update_data)
-                
-                # Return the updated call
-                logger.info(f"Triggered call with Retell, call ID: {db_call.get('id')}, external ID: {retell_call_result.get('call_id')}")
-                return updated_call
-                
-            except Exception as e:
-                # Handle any errors from the Retell integration
-                logger.error(f"Error triggering call with Retell: {str(e)}")
-                
-                # Update call status to error
-                error_update = {
-                    "call_status": "error"
-                }
-                
-                error_call = await self.call_repository.update_call(db_call["id"], error_update)
-                return error_call
-        
-        logger.info(f"Triggered call with ID: {db_call.get('id')} (no Retell integration used)")
-        return db_call
+            
+            logger.info(f"Triggered call with ID: {db_call.get('id')} (no Retell integration used)")
+            return db_call
+        except Exception as e:
+            logger.error(f"Error in trigger_call: {str(e)}")
+            raise ValueError(f"Failed to trigger call: {str(e)}")
     
     async def get_call(self, call_id: str) -> Dict[str, Any]:
         """
-        Get call details by ID.
+        Get call details by ID with exception handling.
         
         Args:
             call_id: ID of the call
             
         Returns:
             Dictionary containing call details
+        
+        Raises:
+            ValueError: If call not found or other error occurs
         """
         logger.info(f"Getting call with ID: {call_id}")
-        call = await self.call_repository.get_call_by_id(call_id)
-        
-        if not call:
-            logger.warning(f"Call with ID {call_id} not found")
-            raise ValueError(f"Call with ID {call_id} not found")
-        
-        return call
+        try:
+            call = await self.call_repository.get_call_by_id(call_id)
+            
+            if not call:
+                logger.warning(f"Call with ID {call_id} not found")
+                raise ValueError(f"Call with ID {call_id} not found")
+            
+            return call
+        except Exception as e:
+            logger.error(f"Error retrieving call {call_id}: {str(e)}")
+            raise ValueError(f"Error retrieving call: {str(e)}")
     
     async def get_calls_by_campaign(self, campaign_id: str,
         page: int = 1,
         page_size: int = 50) -> List[Dict[str, Any]]:
         """
-        Get calls for a campaign.
+        Get calls for a campaign with exception handling.
         
         Args:
             campaign_id: ID of the campaign
+            page: Page number 
+            page_size: Page size
             
         Returns:
             List of calls for the campaign
+        
+        Raises:
+            ValueError: If an error occurs during retrieval
         """
         logger.info(f"Getting calls for campaign: {campaign_id}")
         
-        # Get calls using repository
-        calls_result = await self.call_repository.get_calls_by_campaign(campaign_id,page,page_size)
-        
-        return calls_result.get("calls", [])
+        try:
+            # Get calls using repository
+            calls_result = await self.call_repository.get_calls_by_campaign(campaign_id, page, page_size)
+            return calls_result.get("calls", [])
+        except Exception as e:
+            logger.error(f"Error retrieving calls for campaign {campaign_id}: {str(e)}")
+            raise ValueError(f"Error retrieving calls for campaign: {str(e)}")
     
     async def get_calls_by_lead(self, lead_id: str,
         page: int = 1,
         page_size: int = 50) -> List[Dict[str, Any]]:
         """
-        Get calls for a lead.
+        Get calls for a lead with exception handling.
         
         Args:
             lead_id: ID of the lead
+            page: Page number
+            page_size: Page size
             
         Returns:
             List of calls for the lead
+        
+        Raises:
+            ValueError: If an error occurs during retrieval
         """
         logger.info(f"Getting calls for lead: {lead_id}")
         
-        # Get calls using repository
-        calls_result = await self.call_repository.get_calls_by_lead(lead_id,page,page_size)
-        
-        return calls_result.get("calls", [])
+        try:
+            # Get calls using repository
+            calls_result = await self.call_repository.get_calls_by_lead(lead_id, page, page_size)
+            return calls_result.get("calls", [])
+        except Exception as e:
+            logger.error(f"Error retrieving calls for lead {lead_id}: {str(e)}")
+            raise ValueError(f"Error retrieving calls for lead: {str(e)}")
     
     async def get_calls_by_date_range(
         self, 
@@ -194,25 +224,131 @@ class DefaultCallService(CallService):
         page_size: int = 50
     ) -> List[Dict[str, Any]]:
         """
-        Get calls for a gym within a date range.
+        Get calls for a gym within a date range with exception handling.
         
         Args:
             gym_id: ID of the gym
             start_date: Start date for the range
             end_date: End date for the range
+            page: Page number
+            page_size: Page size
             
         Returns:
             List of calls within the date range
+        
+        Raises:
+            ValueError: If an error occurs during retrieval
         """
         logger.info(f"Getting calls for gym {gym_id} from {start_date} to {end_date}")
         
-        # Get calls using repository
-        calls_result = await self.call_repository.get_calls_by_date_range(
-            gym_id, start_date, end_date, page, page_size
-        )
+        try:
+            # Get calls using repository
+            calls_result = await self.call_repository.get_calls_by_date_range(
+                gym_id, start_date, end_date, page, page_size
+            )
+            return calls_result.get("calls", [])
+        except Exception as e:
+            logger.error(f"Error retrieving calls by date range for gym {gym_id}: {str(e)}")
+            raise ValueError(f"Error retrieving calls by date range: {str(e)}")
+
+    async def get_filtered_calls(
+        self, 
+        gym_id: str,
+        page: int = 1,
+        page_size: int = 50,
+        lead_id: Optional[str] = None,
+        campaign_id: Optional[str] = None,
+        direction: Optional[str] = None,
+        outcome: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Get filtered calls with all possible combinations of filters at the database level.
         
-        return calls_result.get("calls", [])
+        Args:
+            gym_id: ID of the gym (required for security)
+            page: Page number
+            page_size: Page size
+            lead_id: Optional ID of the lead to filter by
+            campaign_id: Optional ID of the campaign to filter by
+            direction: Optional call direction to filter by (inbound/outbound)
+            outcome: Optional call outcome to filter by
+            start_date: Optional start date for date range filtering
+            end_date: Optional end date for date range filtering
+            
+        Returns:
+            Dictionary with calls and pagination info
+        
+        Raises:
+            ValueError: If an error occurs during retrieval
+        """
+        logger.info(f"Getting filtered calls for gym {gym_id} with filters: lead_id={lead_id}, "
+                    f"campaign_id={campaign_id}, direction={direction}, outcome={outcome}")
+        
+        try:
+            # Define default date range if not specified
+            if not start_date:
+                start_date = datetime.now().replace(year=datetime.now().year - 1)
+            if not end_date:
+                end_date = datetime.now()
+            
+            # Use the repository's combined filtering method that pushes all filters to the database
+            return await self.call_repository.get_calls_with_filters(
+                gym_id=gym_id,
+                page=page,
+                page_size=page_size,
+                lead_id=lead_id,
+                campaign_id=campaign_id,
+                direction=direction,
+                outcome=outcome,
+                start_date=start_date,
+                end_date=end_date
+            )
+                
+        except Exception as e:
+            logger.error(f"Error retrieving filtered calls: {str(e)}")
+            raise ValueError(f"Error retrieving filtered calls: {str(e)}")
     
+    async def delete_call(self, call_id: str) -> Dict[str, Any]:
+        """
+        Delete a call record with exception handling.
+        
+        Args:
+            call_id: ID of the call to delete
+            
+        Returns:
+            Dictionary with status information
+            
+        Raises:
+            ValueError: If call not found or other error occurs
+        """
+        logger.info(f"Deleting call with ID: {call_id}")
+        
+        try:
+            # First verify the call exists
+            call = await self.call_repository.get_call_by_id(call_id)
+            
+            if not call:
+                logger.warning(f"Call with ID {call_id} not found")
+                raise ValueError(f"Call with ID {call_id} not found")
+            
+            # Delete the call
+            result = await self.call_repository.delete_call(call_id)
+            
+            if not result:
+                logger.warning(f"Failed to delete call with ID {call_id}")
+                raise ValueError(f"Failed to delete call with ID {call_id}")
+            
+            logger.info(f"Successfully deleted call with ID: {call_id}")
+            return {"status": "success", "message": f"Call with ID {call_id} deleted successfully"}
+        except ValueError as ve:
+            # Re-raise the value errors with proper message
+            raise ve
+        except Exception as e:
+            # Convert other exceptions to ValueError
+            logger.error(f"Error deleting call {call_id}: {str(e)}")
+            raise ValueError(f"Error deleting call: {str(e)}")
 
     """Optional Beyond This point."""
     #Optional
@@ -367,8 +503,6 @@ class DefaultCallService(CallService):
             logger.warning(f"Unknown event type: {event_type}")
             return {"status": "error", "message": f"Unknown event type: {event_type}"}
     
-
-
     #Optional.
     async def create_follow_up_call(self, follow_up_call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -497,12 +631,10 @@ class DefaultCallService(CallService):
         follow_up_calls_result = await self.call_repository.get_follow_up_calls_by_lead(lead_id)
         
         return follow_up_calls_result.get("follow_up_calls", [])
-    
-
-    #Optional. 
+     
     async def update_call(self, call_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Update call information.
+        Update call information with exception handling.
         
         Args:
             call_id: ID of the call
@@ -510,20 +642,26 @@ class DefaultCallService(CallService):
             
         Returns:
             Dictionary containing the updated call details
+            
+        Raises:
+            ValueError: If call not found or other error occurs
         """
         logger.info(f"Updating call with ID: {call_id} with data: {call_data}")
         
-        # Update call using repository
-        updated_call = await self.call_repository.update_call(call_id, call_data)
-        
-        if not updated_call:
-            logger.warning(f"Call with ID {call_id} not found")
-            raise ValueError(f"Call with ID {call_id} not found")
-        
-        logger.info(f"Updated call with ID: {call_id}")
-        return updated_call
+        try:
+            # Update call using repository
+            updated_call = await self.call_repository.update_call(call_id, call_data)
+            
+            if not updated_call:
+                logger.warning(f"Call with ID {call_id} not found")
+                raise ValueError(f"Call with ID {call_id} not found")
+            
+            logger.info(f"Updated call with ID: {call_id}")
+            return updated_call
+        except Exception as e:
+            logger.error(f"Error updating call {call_id}: {str(e)}")
+            raise ValueError(f"Error updating call: {str(e)}")
     
-
     #Optional.
     async def process_call_recording(self, call_id: str, recording_url: str) -> Dict[str, Any]:
         """
@@ -587,4 +725,3 @@ class DefaultCallService(CallService):
         
         logger.info(f"Generated summary for call with ID: {call_id}")
         return updated_call
-  

@@ -34,7 +34,7 @@ class FollowUpCampaign(Base):
     branch = relationship("Branch", back_populates="follow_up_campaigns")
     gym = relationship("Gym", back_populates="follow_up_campaign")
     follow_up_calls = relationship("FollowUpCall", back_populates="follow_up_campaign")
-    call_logs = relationship("CallLog", back_populates="follow_up_campaign")
+    call_logs = relationship("CallLog", back_populates="campaign", cascade="all")  # Changed from "all, delete-orphan" to just "all"
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
