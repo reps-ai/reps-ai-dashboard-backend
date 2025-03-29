@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Redis service (message broker)
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    container_name: reps-ai-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  # Celery worker for lead tasks
+  celery-worker-lead:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: celery -A backend.celery_app worker -Q lead_tasks -l INFO
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - WORKER_CONCURRENCY=2
+    depends_on:
+      - redis
+    restart: unless-stopped
+    container_name: reps-ai-celery-lead
+
+  # Celery worker for call tasks
+  celery-worker-call:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: celery -A backend.celery_app worker -Q call_tasks -l INFO
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - WORKER_CONCURRENCY=2
+    depends_on:
+      - redis
+    restart: unless-stopped
+    container_name: reps-ai-celery-call
+
+  # Celery beat scheduler for periodic tasks
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: celery -A backend.celery_app beat -l INFO
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+    container_name: reps-ai-celery-beat
+
+volumes:
+  redis-data: 
