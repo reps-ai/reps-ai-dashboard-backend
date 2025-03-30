@@ -1,3 +1,6 @@
+"""
+Implementation of the Retell Integration Service.
+"""
 from .interface import RetellIntegration
 from retell import Retell
 import os
@@ -27,11 +30,7 @@ class RetellImplementation(RetellIntegration):
         Returns:
             Dictionary containing authentication result
         """
-        # For Retell, authentication is handled at client initialization
-        # This method serves as a validation check
         try:
-            # We could make a simple API call to validate the key
-            # For now, we'll just return a success message
             return {"status": "success", "message": "API key is set"}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -64,22 +63,12 @@ class RetellImplementation(RetellIntegration):
             if not from_number:
                 raise ValueError("RETELL_FROM_NUMBER environment variable is required")
             
-            # Get the agent ID from environment variables
-            agent_id = os.getenv("RETELL_AGENT_ID")
-            if not agent_id:
-                raise ValueError("RETELL_AGENT_ID environment variable is required")
-            
-            # Prepare call parameters
+            # Prepare call parameters (only required fields)
             call_params = {
                 "from_number": from_number,
                 "to_number": to_number,
-                "agent_id": agent_id,
             }
             
-            # Add optional parameters
-            if max_duration:
-                call_params["max_call_duration_ms"] = max_duration * 1000
-                
             # Add metadata from lead and campaign
             metadata = {}
             if lead_data:
@@ -94,28 +83,21 @@ class RetellImplementation(RetellIntegration):
             if metadata:
                 call_params["metadata"] = metadata
             
-            # Add dynamic variables for the agent if needed
-            dynamic_vars = {}
-            if lead_data.get("name"):
-                dynamic_vars["customer_name"] = lead_data.get("name")
-            
-            if dynamic_vars:
-                call_params["retell_llm_dynamic_variables"] = dynamic_vars
-            
             # Make the API call to create the phone call
             response = self.client.call.create_phone_call(**call_params)
             
             # Convert response to dictionary
             if not isinstance(response, dict):
-                # Convert the response object to a dictionary
                 response_dict = {
                     "call_id": response.call_id,
-                    "agent_id": response.agent_id,
-                    "call_status": response.call_status,
+                    "call_status": response.call_status if hasattr(response, 'call_status') and response.call_status is not None else "registered",
                     "metadata": response.metadata
                 }
             else:
                 response_dict = response
+                # Ensure response has a call_status
+                if "call_status" not in response_dict or response_dict["call_status"] is None:
+                    response_dict["call_status"] = "registered"
             
             # Add additional context
             response_dict["lead_data"] = lead_data
@@ -132,15 +114,7 @@ class RetellImplementation(RetellIntegration):
             }
 
     async def get_call_recording(self, call_id: str) -> Dict[str, Any]:
-        """
-        Get the recording for a call.
-        
-        Args:
-            call_id: ID of the call
-            
-        Returns:
-            Dictionary containing recording information
-        """
+        """Get recording for a call."""
         try:
             # First get call details which include recording URL
             call_details = await self.get_call_status(call_id)
@@ -148,9 +122,7 @@ class RetellImplementation(RetellIntegration):
             if call_details.get("status") == "error":
                 return call_details
                 
-            # Extract recording URL
             recording_url = call_details.get("recording_url")
-            
             if not recording_url:
                 return {
                     "status": "error",
@@ -172,15 +144,7 @@ class RetellImplementation(RetellIntegration):
             }
 
     async def get_call_transcript(self, call_id: str) -> List[Dict[str, Any]]:
-        """
-        Get the transcript for a call.
-        
-        Args:
-            call_id: ID of the call
-            
-        Returns:
-            List of transcript entries
-        """
+        """Get transcript for a call."""
         try:
             # First get call details which include transcript
             call_details = await self.get_call_status(call_id)
@@ -193,7 +157,6 @@ class RetellImplementation(RetellIntegration):
             
             # If transcript_object is not available, try to parse the transcript string
             if not transcript_object and call_details.get("transcript"):
-                # Simple parsing of the transcript string
                 transcript_string = call_details.get("transcript", "")
                 lines = transcript_string.strip().split("\n")
                 
@@ -216,15 +179,7 @@ class RetellImplementation(RetellIntegration):
             return []
 
     async def process_webhook(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process a webhook from Retell.
-        
-        Args:
-            webhook_data: Dictionary containing webhook data
-            
-        Returns:
-            Dictionary containing processed webhook result
-        """
+        """Process a webhook from Retell."""
         try:
             # Extract event type and call data
             event = webhook_data.get("event")
@@ -273,7 +228,6 @@ class RetellImplementation(RetellIntegration):
                     "custom_data": analysis.get("custom_analysis_data", {}),
                     "raw_data": call_data
                 }
-                
             else:
                 return {
                     "event_type": "unknown",

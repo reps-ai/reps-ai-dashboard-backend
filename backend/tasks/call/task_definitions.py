@@ -1,260 +1,391 @@
 """
-Celery tasks for call processing operations.
+Task definitions for call-related background jobs.
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from datetime import datetime
+import asyncio
+import uuid
 
-from backend.celery_app import app
-from backend.services.call.factory import create_call_service
-from backend.services.lead.factory import create_lead_service
-from backend.services.campaign.factory import create_campaign_service
-from backend.utils.logging.logger import get_logger
+from ...celery_app import app
+from ...db.repositories.call.implementations.postgres_call_repository import PostgresCallRepository
+from ...db.connections.database import SessionLocal
+from ...utils.logging.logger import get_logger
+from ...integrations.retell.factory import create_retell_integration
 
 logger = get_logger(__name__)
 
-@app.task(name='call.process_call_completion', bind=True, max_retries=3)
-def process_call_completion(self, call_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
+def run_async(coro):
+    """Run an async coroutine in a synchronous context, properly isolating the event loop."""
+    try:
+        # Create a new event loop for this task
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro)
+    finally:
+        # Properly close the loop to avoid resource leaks
+        if loop and not loop.is_closed():
+            # Cancel any remaining tasks
+            for task in asyncio.all_tasks(loop):
+                task.cancel()
+            loop.close()
+
+@app.task(
+    name='call.create_retell_call',
+    queue='call_tasks',
+    bind=True,
+    retry_backoff=True,
+    max_retries=3
+)
+def create_retell_call(self, db_call_id: str, lead_data: Dict[str, Any], campaign_id: str = None) -> bool:
     """
-    Process a call after it has been completed as a background task.
+    Create a Retell call as a background task and update the database with the result.
     
     Args:
-        call_id: ID of the call
-        call_data: Call data including outcome, notes, etc.
+        db_call_id: ID of the call in our database
+        lead_data: Dictionary containing lead information
+        campaign_id: Optional ID of the campaign
         
     Returns:
-        Updated call data
+        Boolean indicating if the operation was successful
     """
-    logger.info(f"Background task: processing completion for call {call_id}")
-    
     try:
-        # Create service instances
-        call_service = create_call_service()
-        lead_service = create_lead_service()
+        logger.info(f"Creating Retell call for database call ID: {db_call_id}")
         
-        # Convert to awaitable result
-        import asyncio
-        
-        # Update call with completion data
-        call = asyncio.run(call_service.update_call(call_id, {
-            "status": "completed",
-            "end_time": datetime.now().isoformat(),
-            "outcome": call_data.get("outcome"),
-            "notes": call_data.get("notes")
-        }))
-        
-        if not call:
-            logger.error(f"Call {call_id} not found")
-            raise ValueError(f"Call {call_id} not found")
-        
-        # Update lead based on call outcome
-        lead_id = call.get("lead_id")
-        if lead_id:
-            logger.info(f"Updating lead {lead_id} based on call outcome")
-            
-            # Prepare lead update data
-            lead_update_data = {
-                "last_call_date": datetime.now().isoformat()
-            }
-            
-            # Update lead status based on outcome
-            outcome = call_data.get("outcome")
-            if outcome == "scheduled":
-                lead_update_data["status"] = "scheduled"
-            elif outcome == "not_interested":
-                lead_update_data["status"] = "closed"
-            elif outcome == "callback":
-                lead_update_data["status"] = "callback"
+        # Define async function to handle the call creation and database updates
+        async def create_call_and_update_db():
+            # Get database session
+            db = SessionLocal()
+            try:
+                # Create repository
+                repository = PostgresCallRepository(db)
                 
-                # If callback requested, add callback date if provided
-                if "callback_date" in call_data:
-                    lead_update_data["callback_date"] = call_data["callback_date"]
-            
-            # Update lead
-            asyncio.run(lead_service.update_lead(lead_id, lead_update_data))
-            
-            # Update lead qualification if needed
-            if "qualification" in call_data:
-                asyncio.run(lead_service.qualify_lead(lead_id, call_data["qualification"]))
-            
-            # Add tags if provided
-            if "tags" in call_data and call_data["tags"]:
-                asyncio.run(lead_service.add_tags_to_lead(lead_id, call_data["tags"]))
+                # Create Retell integration
+                retell_integration = create_retell_integration()
+                
+                # Make the call using Retell
+                retell_call_result = await retell_integration.create_call(
+                    lead_data=lead_data,
+                    campaign_id=campaign_id
+                )
+                
+                # Prepare update data
+                update_data = {}
+                
+                if retell_call_result.get("status") == "error":
+                    # Handle error from Retell
+                    logger.error(f"Error from Retell: {retell_call_result.get('message')}")
+                    update_data = {
+                        "call_status": "error",
+                        "human_notes": f"Retell error: {retell_call_result.get('message')}"
+                    }
+                else:
+                    # Extract call status and ID from Retell
+                    call_status = retell_call_result.get("call_status", "scheduled")
+                    retell_call_id = retell_call_result.get("call_id")
+                    
+                    # Update with Retell data
+                    update_data = {
+                        "call_status": call_status,
+                        "external_call_id": retell_call_id
+                    }
+                    
+                    # If we got a successful call, schedule polling for updates
+                    if retell_call_id:
+                        # Schedule first polling attempt after 2 minutes
+                        app.send_task(
+                            'call.poll_retell_call_status',
+                            args=[db_call_id, retell_call_id, 1],
+                            countdown=120  # 2 minutes
+                        )
+                        logger.info(f"Scheduled first polling task for call {db_call_id} in 2 minutes")
+                
+                # Update the call record
+                updated_call = await repository.update_call(db_call_id, update_data)
+                
+                if not updated_call:
+                    logger.error(f"Failed to update call {db_call_id}")
+                    return False
+                
+                # Commit the transaction
+                await db.commit()
+                
+                logger.info(f"Successfully created Retell call for {db_call_id}")
+                return True
+            except Exception as e:
+                logger.error(f"Database error in create_call_and_update_db: {str(e)}")
+                # Rollback on error
+                await db.rollback()
+                # Re-raise to trigger retry
+                raise
+            finally:
+                # Close the session
+                await db.close()
         
-        logger.info(f"Successfully processed completion for call {call_id}")
-        return call
-    
+        # Run the async function
+        result = run_async(create_call_and_update_db())
+        return result
+        
     except Exception as e:
-        logger.error(f"Error processing completion for call {call_id}: {str(e)}")
-        self.retry(exc=e, countdown=2 ** self.request.retries)
+        logger.error(f"Error creating Retell call for call {db_call_id}: {str(e)}")
+        # Retry the task with exponential backoff
+        self.retry(exc=e, countdown=60)
+        return False
 
-
-@app.task(name='call.analyze_call_transcript', bind=True, max_retries=3)
-def analyze_call_transcript(self, call_id: str) -> Dict[str, Any]:
+@app.task(
+    name='call.process_retell_call',
+    queue='call_tasks',
+    bind=True,
+    retry_backoff=True,
+    max_retries=3
+)
+def process_retell_call(self, db_call_id: str, retell_call_data: Dict[str, Any]) -> bool:
     """
-    Analyze a call transcript to extract insights as a background task.
+    Process a completed Retell call and update our database.
+    
+    This task should be triggered when a call completes in Retell, either through
+    a webhook callback or when a call is completed.
     
     Args:
-        call_id: ID of the call
-        
-    Returns:
-        Call data with analysis results
+        db_call_id: ID of the call in our database
+        retell_call_data: Complete call data from Retell
     """
-    logger.info(f"Background task: analyzing transcript for call {call_id}")
-    
     try:
-        # Create service instance
-        call_service = create_call_service()
+        logger.info(f"Processing Retell call data for call ID: {db_call_id}")
         
-        # Convert to awaitable result
-        import asyncio
-        
-        # Get call data
-        call = asyncio.run(call_service.get_call(call_id))
-        
-        if not call:
-            logger.error(f"Call {call_id} not found")
-            raise ValueError(f"Call {call_id} not found")
-        
-        # Check if transcript exists
-        transcript = call.get("transcript")
-        if not transcript or not transcript.get("content"):
-            logger.warning(f"No transcript found for call {call_id}")
-            return call
-        
-        # In a real implementation, you would analyze the transcript here
-        # For now, we'll just add placeholder analysis results
-        
-        # Extract key points (placeholder)
-        key_points = ["This is a placeholder for key points from the call"]
-        
-        # Determine sentiment (placeholder)
-        sentiment = "neutral"
-        
-        # Extract action items (placeholder)
-        action_items = ["This is a placeholder for action items from the call"]
-        
-        # Update call metrics with analysis results
-        metrics_data = {
-            "key_points": key_points,
-            "sentiment": sentiment,
-            "action_items": action_items,
-            "analyzed_at": datetime.now().isoformat()
+        # Initialize the update data dictionary with sensible defaults
+        update_data = {
+            "call_status": "in_progress"  # Default status if we can't determine completion
         }
         
-        # Update the call with analysis results
-        updated_call = asyncio.run(call_service.update_call(call_id, {"metrics": metrics_data}))
+        # Extract the Retell call ID and store it as is
+        retell_call_id = retell_call_data.get("call_id")
+        if retell_call_id:
+            # If it's a string like "call_abc123", extract just the ID part
+            if isinstance(retell_call_id, str) and retell_call_id.startswith("call_"):
+                retell_call_id = retell_call_id[5:]  # Remove the "call_" prefix
+            
+            # Store directly as string
+            update_data["external_call_id"] = retell_call_id
+            logger.info(f"Storing external call ID: {retell_call_id}")
         
-        logger.info(f"Successfully analyzed transcript for call {call_id}")
-        return updated_call
-    
-    except Exception as e:
-        logger.error(f"Error analyzing transcript for call {call_id}: {str(e)}")
-        self.retry(exc=e, countdown=2 ** self.request.retries)
-
-
-@app.task(name='call.process_call_recording', bind=True, max_retries=3)
-def process_call_recording(self, call_id: str, recording_url: str) -> Dict[str, Any]:
-    """
-    Process a call recording as a background task.
-    
-    Args:
-        call_id: ID of the call
-        recording_url: URL of the recording
+        # Extract timestamp data if available
+        if retell_call_data.get("start_timestamp"):
+            update_data["start_time"] = datetime.fromtimestamp(retell_call_data["start_timestamp"] / 1000)
         
-    Returns:
-        Dictionary containing processed call details
-    """
-    logger.info(f"Background task: processing recording for call {call_id}")
-    
-    try:
-        # Create service instance
-        call_service = create_call_service()
+        if retell_call_data.get("end_timestamp"):
+            update_data["end_time"] = datetime.fromtimestamp(retell_call_data["end_timestamp"] / 1000)
+            # If we have both timestamps, we can calculate duration
+            if retell_call_data.get("start_timestamp"):
+                update_data["duration"] = (retell_call_data["end_timestamp"] - retell_call_data["start_timestamp"]) // 1000
+                # If we have an end timestamp, the call is likely completed
+                update_data["call_status"] = "completed"
         
-        # Convert to awaitable result
-        import asyncio
-        result = asyncio.run(call_service.process_call_recording(call_id, recording_url))
+        # Add media data if available
+        if retell_call_data.get("recording_url"):
+            update_data["recording_url"] = retell_call_data["recording_url"]
         
-        # After processing the recording, trigger transcript analysis as a separate task
-        analyze_call_transcript.delay(call_id)
+        if retell_call_data.get("transcript"):
+            update_data["transcript"] = retell_call_data["transcript"]
         
-        logger.info(f"Successfully processed recording for call {call_id}")
+        # Add analysis data if available
+        if retell_call_data.get("call_analysis"):
+            analysis = retell_call_data["call_analysis"]
+            if analysis.get("call_summary"):
+                update_data["summary"] = analysis["call_summary"]
+            
+            if analysis.get("user_sentiment"):
+                update_data["sentiment"] = analysis["user_sentiment"].lower()
+        
+        # Define the async function to handle database operations
+        async def update_call_db():
+            # Get database session
+            db = SessionLocal()
+            try:
+                repository = PostgresCallRepository(db)
+                
+                # Get current call state
+                current_call = await repository.get_call_by_id(db_call_id)
+                
+                # If call not found, log and return
+                if not current_call:
+                    logger.error(f"Call with ID {db_call_id} not found")
+                    return False
+                
+                # Don't overwrite completed/error state with in_progress
+                if current_call.get("call_status") in ["completed", "error"]:
+                    if update_data.get("call_status") == "in_progress":
+                        update_data.pop("call_status", None)
+                
+                # Update the call record
+                updated_call = await repository.update_call(db_call_id, update_data)
+                
+                if not updated_call:
+                    logger.error(f"Failed to update call {db_call_id}")
+                    return False
+                    
+                # Explicitly commit changes
+                await db.commit()
+                
+                logger.info(f"Successfully updated call {db_call_id}")
+                return True
+            except Exception as e:
+                logger.error(f"Database error: {str(e)}")
+                # Explicitly rollback on error
+                await db.rollback()
+                # Re-raise to trigger retry
+                raise
+            finally:
+                # Make sure to properly close the session
+                await db.close()
+        
+        # Run the async function with proper error handling
+        result = run_async(update_call_db())
         return result
-    
+        
     except Exception as e:
-        logger.error(f"Error processing recording for call {call_id}: {str(e)}")
-        self.retry(exc=e, countdown=2 ** self.request.retries)
+        logger.error(f"Error processing Retell call data for call {db_call_id}: {str(e)}")
+        # Retry the task with exponential backoff
+        self.retry(exc=e, countdown=60)
+        return False
 
-
-@app.task(name='call.schedule_calls_for_campaign', bind=True, max_retries=3)
-def schedule_calls_for_campaign(self, campaign_id: str, date_str: str = None, max_calls: int = 50) -> List[Dict[str, Any]]:
+@app.task(
+    name='call.poll_retell_call_status',
+    queue='call_tasks',
+    bind=True,
+    retry_backoff=True,
+    max_retries=3
+)
+def poll_retell_call_status(self, db_call_id: str, external_call_id: str, attempt: int = 1) -> bool:
     """
-    Schedule calls for a campaign on a specific date as a background task.
+    Poll Retell API for call status updates as a backup for webhooks.
+    
+    This task is scheduled after a call is created as a fallback in case
+    webhook notifications are missed. It checks at increasing intervals:
+    1. First check: 2 minutes after call creation
+    2. Second check: 5 minutes after first check
+    3. Third check: 15 minutes after second check
+    4. Final check: 30 minutes after call creation (mark as error if still pending)
     
     Args:
-        campaign_id: ID of the campaign
-        date_str: Date string to schedule calls for (ISO format)
-        max_calls: Maximum number of calls to schedule
-        
-    Returns:
-        List of scheduled call data
+        db_call_id: ID of the call in our database
+        external_call_id: ID of the call in Retell (now a string)
+        attempt: Current polling attempt (1-4)
     """
-    logger.info(f"Background task: scheduling calls for campaign {campaign_id}")
+    logger.info(f"Polling Retell for call status: call ID {db_call_id}, attempt {attempt}")
     
     try:
-        # Create service instances
-        call_service = create_call_service()
-        lead_service = create_lead_service()
-        campaign_service = create_campaign_service()
+        # Define the async function to handle API call and database operations
+        async def check_call_status():
+            # Get database session
+            db = SessionLocal()
+            try:
+                # Create repository
+                repository = PostgresCallRepository(db)
+                
+                # First, check if call is already completed (to avoid unnecessary API calls)
+                current_call = await repository.get_call_by_id(db_call_id)
+                
+                if not current_call:
+                    logger.error(f"Call with ID {db_call_id} not found")
+                    return False
+                
+                # If call is already completed or in error state, no need to poll
+                if current_call.get("call_status") in ["completed", "error"]:
+                    logger.info(f"Call {db_call_id} already in final state: {current_call.get('call_status')}, no polling needed")
+                    return True
+                
+                # Create Retell integration
+                retell_integration = create_retell_integration()
+                
+                # Get call status from Retell
+                call_status_result = await retell_integration.get_call_status(external_call_id)
+                
+                # Check if API call was successful
+                if call_status_result.get("status") == "error":
+                    logger.error(f"Error getting call status from Retell: {call_status_result.get('message')}")
+                    
+                    # If final attempt and call still not updated, mark as error
+                    if attempt >= 4:
+                        error_update = {
+                            "call_status": "error",
+                            "human_notes": f"{current_call.get('human_notes', '')} | Error in final polling attempt: {call_status_result.get('message')}"
+                        }
+                        await repository.update_call(db_call_id, error_update)
+                        await db.commit()
+                        logger.warning(f"Marked call {db_call_id} as error after final polling attempt")
+                    
+                    return False
+                
+                # If successful, process call data
+                call_data = {
+                    "call_id": external_call_id,
+                    "call_status": call_status_result.get("call_status"),
+                    "start_timestamp": call_status_result.get("start_timestamp"),
+                    "end_timestamp": call_status_result.get("end_timestamp"),
+                    "recording_url": call_status_result.get("recording_url"),
+                    "transcript": call_status_result.get("transcript"),
+                    "call_analysis": call_status_result.get("call_analysis", {})
+                }
+                
+                # Process the data using the existing task
+                from backend.celery_app import app as celery_app
+                celery_app.send_task(
+                    'call.process_retell_call',
+                    args=[db_call_id, call_data]
+                )
+                
+                logger.info(f"Successfully polled Retell for call {db_call_id}, status: {call_data.get('call_status')}")
+                
+                # Schedule next polling attempt if needed
+                if call_data.get("call_status") not in ["completed", "failed", "error"]:
+                    if attempt == 1:
+                        # Second check after 5 minutes
+                        celery_app.send_task(
+                            'call.poll_retell_call_status',
+                            args=[db_call_id, external_call_id, 2],
+                            countdown=300  # 5 minutes
+                        )
+                        logger.info(f"Scheduled second polling attempt for call {db_call_id} in 5 minutes")
+                    elif attempt == 2:
+                        # Third check after 15 minutes
+                        celery_app.send_task(
+                            'call.poll_retell_call_status',
+                            args=[db_call_id, external_call_id, 3],
+                            countdown=900  # 15 minutes
+                        )
+                        logger.info(f"Scheduled third polling attempt for call {db_call_id} in 15 minutes")
+                    elif attempt == 3:
+                        # Final check (only if 30 minutes haven't passed yet)
+                        celery_app.send_task(
+                            'call.poll_retell_call_status',
+                            args=[db_call_id, external_call_id, 4],
+                            countdown=600  # 10 minutes (30 min total from start)
+                        )
+                        logger.info(f"Scheduled final polling attempt for call {db_call_id} in 10 minutes")
+                    elif attempt >= 4:
+                        # If still not completed after final check, mark as error
+                        error_update = {
+                            "call_status": "error",
+                            "human_notes": f"{current_call.get('human_notes', '')} | Call timed out after 30 minutes"
+                        }
+                        await repository.update_call(db_call_id, error_update)
+                        await db.commit()
+                        logger.warning(f"Marked call {db_call_id} as error after timeout")
+                
+                return True
+            except Exception as e:
+                logger.error(f"Error in check_call_status: {str(e)}")
+                await db.rollback()
+                raise
+            finally:
+                await db.close()
         
-        # Convert to awaitable result
-        import asyncio
+        # Run the async function
+        result = run_async(check_call_status())
+        return result
         
-        # Parse date if provided, otherwise use current date
-        if date_str:
-            date = datetime.fromisoformat(date_str)
-        else:
-            date = datetime.now()
-        
-        # Get the campaign details
-        campaign = asyncio.run(campaign_service.get_campaign_by_id(campaign_id))
-        
-        if not campaign:
-            logger.error(f"Campaign {campaign_id} not found")
-            raise ValueError(f"Campaign {campaign_id} not found")
-        
-        # Get prioritized leads for the campaign
-        leads = asyncio.run(lead_service.get_prioritized_leads(
-            gym_id=campaign.get("gym_id"),
-            count=max_calls,
-            qualification=campaign.get("settings", {}).get("preferred_qualification"),
-            exclude_leads=[]  # In a real implementation, exclude leads with scheduled calls
-        ))
-        
-        # Schedule calls for each lead
-        scheduled_calls = []
-        
-        for lead in leads:
-            # Create call data
-            call_data = {
-                "lead_id": lead.get("id"),
-                "campaign_id": campaign_id,
-                "gym_id": campaign.get("gym_id"),
-                "call_status": "scheduled",
-                "scheduled_time": date.isoformat()
-            }
-            
-            # Create call
-            call = asyncio.run(call_service.trigger_call(
-                lead_id=lead.get("id"),
-                campaign_id=campaign_id,
-                lead_data=lead
-            ))
-            
-            scheduled_calls.append(call)
-        
-        logger.info(f"Successfully scheduled {len(scheduled_calls)} calls for campaign {campaign_id}")
-        return scheduled_calls
-    
     except Exception as e:
-        logger.error(f"Error scheduling calls for campaign {campaign_id}: {str(e)}")
-        self.retry(exc=e, countdown=2 ** self.request.retries) 
+        logger.error(f"Error polling Retell call status for call {db_call_id}: {str(e)}")
+        # Retry the task with exponential backoff
+        self.retry(exc=e, countdown=30)
+        return False

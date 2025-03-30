@@ -52,9 +52,15 @@ class PostgresCallRepository(CallRepository):
         new_call = CallLog(**call_data)
         self.session.add(new_call)
         await self.session.commit()
-        await self.session.refresh(new_call)
         
-        return new_call.to_dict()
+        # Return the model's dictionary representation directly without additional lookups
+        call_dict = new_call.to_dict()
+        logger.info(f"Created new call with ID: {call_dict.get('id')}")
+        # Get the call ID
+        call_id = str(new_call.id)
+        
+        # Instead of refreshing, retrieve the call data directly
+        return await get_call_with_related_data(self.session, call_id) or new_call.to_dict()
     
     #Works
     async def get_call_by_id(self, call_id: str) -> Optional[Dict[str, Any]]:
@@ -617,8 +623,34 @@ class PostgresCallRepository(CallRepository):
             Dictionary containing call data, or None if not found
         """
         logger.info(f"Getting call with external ID: {external_call_id}")
-        # Placeholder implementation
-        return None
+        
+        try:
+            # Search for calls with the given external call ID
+            query = select(CallLog).where(CallLog.external_call_id == external_call_id)
+            
+            result = await self.session.execute(query)
+            call = result.scalars().first()
+            
+            if not call:
+                # If not found, try the legacy approach with human_notes as fallback
+                logger.info(f"No call found with external_call_id field, trying human_notes fallback")
+                query = select(CallLog).where(
+                    CallLog.human_notes.contains(f"Retell call ID: {external_call_id}")
+                )
+                
+                result = await self.session.execute(query)
+                call = result.scalars().first()
+            
+            if not call:
+                logger.warning(f"No call found with external ID: {external_call_id}")
+                return None
+                
+            # Get full call data with related entities
+            return await get_call_with_related_data(self.session, str(call.id))
+            
+        except Exception as e:
+            logger.error(f"Error getting call by external ID: {str(e)}")
+            return None
         
     async def save_call_recording(self, call_id: str, recording_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
@@ -679,3 +711,42 @@ class PostgresCallRepository(CallRepository):
         logger.info(f"Updating status for call: {call_id}")
         # Placeholder implementation using update_call
         return await self.update_call(call_id, {"call_status": status})
+
+    async def get_calls_by_human_notes(self, notes_text: str) -> List[Dict[str, Any]]:
+        """
+        Get calls where human_notes contains specific text.
+        
+        Args:
+            notes_text: Text to search for in human_notes
+        
+        Returns:
+            List of call data dictionaries
+        """
+        logger.info(f"Getting calls with human_notes containing: {notes_text}")
+        
+        try:
+            # Search for calls where human_notes contains the specified text
+            query = select(CallLog).where(
+                CallLog.human_notes.contains(notes_text)
+            )
+            
+            result = await self.session.execute(query)
+            calls = result.scalars().all()
+            
+            if not calls:
+                logger.warning(f"No calls found with human_notes containing: {notes_text}")
+                return []
+            
+            # Convert to dictionary format
+            call_list = []
+            for call in calls:
+                # Get full call data with related entities
+                call_data = await get_call_with_related_data(self.session, str(call.id))
+                if call_data:
+                    call_list.append(call_data)
+            
+            return call_list
+            
+        except Exception as e:
+            logger.error(f"Error getting calls by human_notes: {str(e)}")
+            return []

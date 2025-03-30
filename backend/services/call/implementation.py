@@ -42,19 +42,12 @@ class DefaultCallService(CallService):
         Returns:
             Dictionary containing call details
             
-
-        Raises:
-            ValueError: If there's an error triggering the call
-=======
-
-            It doesn't return a dict to the user, we trigger a background task that will take the call data and store it in the database. 
-            After that, we need to update the lead with the call data, so we will call another background task for that.
-            This ensures we don't block the main thread and we can handle the call asynchronously.
-            
         Raises:
             ValueError: If there's an error triggering the call
 
-
+        This method creates an initial call record in the database and then 
+        uses a Celery background task to create the call in Retell and update the database.
+        This ensures we don't block the main thread and we can handle the call asynchronously.
         """
         try:
             logger.info(f"Triggering call to lead: {lead_id}")
@@ -82,8 +75,6 @@ class DefaultCallService(CallService):
                 "branch_id": lead_data.get("branch_id"),
                 "call_status": "scheduled",
                 "call_type": "outbound",
-                "created_at": datetime.now(),
-                "start_time": datetime.now()
             }
             
             if campaign_id:
@@ -93,53 +84,37 @@ class DefaultCallService(CallService):
             db_call = await self.call_repository.create_call(call_data)
             logger.info(f"Created initial call record with ID: {db_call.get('id')}")
             
-            # If Retell integration is available, use it to make the call
+            # If Retell integration is available, use it to make the call via Celery task
             if self.retell_integration:
                 try:
-                    # Set max duration if needed (could be based on campaign settings)
-                    max_duration = None
+                    # Queue the create_retell_call task to handle Retell integration in the background
+                    from ...celery_app import app as celery_app
                     
-                    # Make the actual call using Retell
-                    retell_call_result = await self.retell_integration.create_call(
-                        lead_data=lead_data,
-                        campaign_id=campaign_id,
-                        max_duration=max_duration
+                    # Send task to create Retell call
+                    celery_app.send_task(
+                        'call.create_retell_call',
+                        args=[str(db_call.get("id")), lead_data, campaign_id]
                     )
                     
-                    if retell_call_result.get("status") == "error":
-                        # Handle error from Retell
-                        logger.error(f"Error from Retell: {retell_call_result.get('message')}")
-                        error_update = {
-                            "call_status": "error"
-                        }
-                        error_call = await self.call_repository.update_call(db_call["id"], error_update)
-                        return error_call
+                    logger.info(f"Queued create_retell_call task for call ID: {db_call.get('id')}")
                     
-                    # Update the call data with Retell specific information
-                    update_data = {
-                        "call_status": retell_call_result.get("call_status", "scheduled"),
-                        "external_call_id": retell_call_result.get("call_id")
-                    }
-                    
-                    # Update the call in our database
-                    updated_call = await self.call_repository.update_call(db_call["id"], update_data)
-                    
-                    # Return the updated call
-                    logger.info(f"Triggered call with Retell, call ID: {db_call.get('id')}, external ID: {retell_call_result.get('call_id')}")
-                    return updated_call
+                    # Return the initial call record - the background task will update it
+                    return db_call
                     
                 except Exception as e:
-                    # Handle any errors from the Retell integration
-                    logger.error(f"Error triggering call with Retell: {str(e)}")
+                    # Handle any errors from the task queueing
+                    logger.error(f"Error queueing Retell call task: {str(e)}")
                     
                     # Update call status to error
                     error_update = {
-                        "call_status": "error"
+                        "call_status": "error",
+                        "human_notes": f"Error queueing Retell call task: {str(e)}"
                     }
                     
                     error_call = await self.call_repository.update_call(db_call["id"], error_update)
                     return error_call
             
+            # No Retell integration, just return the call record
             logger.info(f"Triggered call with ID: {db_call.get('id')} (no Retell integration used)")
             return db_call
         except Exception as e:
@@ -394,7 +369,38 @@ class DefaultCallService(CallService):
                     }
                 
                 # Find our internal call with this external call ID
-                call = await self.call_repository.get_call_by_external_id(external_call_id)
+                # First, try to find by external_call_id field
+                call = None
+                
+                # Clean external_call_id if it has a prefix
+                clean_external_id = external_call_id
+                
+                # If external ID has a prefix like "call_", remove it
+                if isinstance(external_call_id, str) and external_call_id.startswith("call_"):
+                    clean_external_id = external_call_id[5:]
+                    logger.info(f"Cleaned call ID prefix: {external_call_id} -> {clean_external_id}")
+                
+                # Try to find by external_call_id
+                logger.info(f"Looking up call by external_call_id: {clean_external_id}")
+                call = await self.call_repository.get_call_by_external_id(clean_external_id)
+                
+                # If not found, try searching human_notes as fallback
+                if not call:
+                    logger.info(f"Call not found by external_call_id, searching in human_notes")
+                    calls = await self.call_repository.get_calls_by_human_notes(f"Retell call ID: {external_call_id}")
+                    
+                    if calls and len(calls) > 0:
+                        # Take the first match
+                        call = calls[0]
+                        logger.info(f"Found call in human_notes: {call.get('id')}")
+                        
+                        # Update with external_call_id for future lookups
+                        logger.info(f"Updating call {call.get('id')} with external_call_id: {clean_external_id}")
+                        update_data = {"external_call_id": clean_external_id}
+                        await self.call_repository.update_call(call.get("id"), update_data)
+                        
+                        # Refresh call data
+                        call = await self.call_repository.get_call_by_id(call.get("id"))
                 
                 if not call:
                     logger.warning(f"Call with external ID {external_call_id} not found")
@@ -404,6 +410,7 @@ class DefaultCallService(CallService):
                         "processed_webhook": processed_webhook
                     }
                 
+                # Now we have our internal call ID
                 call_id = call.get("id")
                 
                 # Process the event based on type
@@ -414,7 +421,12 @@ class DefaultCallService(CallService):
                         "start_time": datetime.fromtimestamp(processed_webhook.get("timestamp", 0) / 1000) if processed_webhook.get("timestamp") else datetime.now()
                     }
                     updated_call = await self.call_repository.update_call(call_id, update_data)
-                    return {"status": "success", "call": updated_call}
+                    return {
+                        "status": "success", 
+                        "call": updated_call, 
+                        "event_type": event_type,
+                        "call_id": external_call_id
+                    }
                 
                 elif event_type == "call.ended":
                     # Update call with transcript, recording, and status
@@ -431,7 +443,15 @@ class DefaultCallService(CallService):
                         "transcript": transcript
                     }
                     updated_call = await self.call_repository.update_call(call_id, update_data)
-                    return {"status": "success", "call": updated_call}
+                    return {
+                        "status": "success", 
+                        "call": updated_call, 
+                        "event_type": event_type,
+                        "call_id": external_call_id,
+                        "recording_url": recording_url,
+                        "transcript": transcript,
+                        "timestamp": processed_webhook.get("timestamp")
+                    }
                 
                 elif event_type == "call.analyzed":
                     # Update call with analysis data
@@ -444,7 +464,14 @@ class DefaultCallService(CallService):
                     }
                     
                     updated_call = await self.call_repository.update_call(call_id, update_data)
-                    return {"status": "success", "call": updated_call}
+                    return {
+                        "status": "success", 
+                        "call": updated_call, 
+                        "event_type": event_type,
+                        "call_id": external_call_id,
+                        "summary": summary,
+                        "sentiment": sentiment
+                    }
                 
                 else:
                     logger.warning(f"Unknown event type from Retell: {event_type}")
