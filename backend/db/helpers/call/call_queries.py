@@ -869,3 +869,243 @@ async def get_follow_up_calls_by_lead_db(
             "pages": (total_calls + page_size - 1) // page_size
         }
     }
+
+async def get_filtered_calls_db(
+    session: AsyncSession,
+    gym_id: str,
+    page: int = 1,
+    page_size: int = 50,
+    lead_id: Optional[str] = None,
+    campaign_id: Optional[str] = None,
+    direction: Optional[str] = None,  # call_type in the DB
+    outcome: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    sort_by: str = "start_time",
+    sort_order: str = "desc"
+) -> Dict[str, Any]:
+    """
+    Get calls with combined filtering criteria efficiently at DB level.
+    
+    Args:
+        session: Database session
+        gym_id: ID of the gym (required for security)
+        page: Page number
+        page_size: Page size
+        lead_id: Optional ID of the lead to filter by
+        campaign_id: Optional ID of the campaign to filter by
+        direction: Optional call direction to filter by (inbound/outbound)
+        outcome: Optional call outcome to filter by
+        start_date: Optional start date for date range filtering
+        end_date: Optional end date for date range filtering
+        sort_by: Field to sort by
+        sort_order: Order of sorting
+        
+    Returns:
+        Dictionary containing calls and pagination info
+    """
+    logger.info(f"Getting filtered calls with combined criteria: gym_id={gym_id}, "
+                f"lead_id={lead_id}, campaign_id={campaign_id}, direction={direction}, "
+                f"outcome={outcome}, date range={start_date} to {end_date}")
+    
+    # Build the base query with dynamic conditions
+    conditions = []
+    
+    # Apply gym_id filter (security)
+    if gym_id:
+        conditions.append(CallLog.gym_id == gym_id)
+    
+    # Apply lead_id filter if provided
+    if lead_id:
+        try:
+            # Convert to UUID if needed
+            lead_uuid = lead_id if isinstance(lead_id, UUID) else UUID(lead_id)
+            conditions.append(CallLog.lead_id == lead_uuid)
+        except Exception as e:
+            logger.error(f"Invalid lead_id format: {str(e)}")
+            # Use a condition that will return no results
+            conditions.append(CallLog.lead_id == None)  # noqa
+    
+    # Apply campaign_id filter if provided
+    if campaign_id:
+        try:
+            # Convert to UUID if needed
+            campaign_uuid = campaign_id if isinstance(campaign_id, UUID) else UUID(campaign_id)
+            conditions.append(CallLog.campaign_id == campaign_uuid)
+        except Exception as e:
+            logger.error(f"Invalid campaign_id format: {str(e)}")
+            # Use a condition that will return no results
+            conditions.append(CallLog.campaign_id == None)  # noqa
+    
+    # Apply direction filter (call_type in DB) if provided
+    if direction:
+        conditions.append(CallLog.call_type == direction)
+    
+    # Apply outcome filter if provided
+    if outcome:
+        conditions.append(CallLog.outcome == outcome)
+    
+    # Apply date range filter if provided
+    if start_date:
+        conditions.append(CallLog.start_time >= start_date)
+    if end_date:
+        conditions.append(CallLog.start_time <= end_date)
+    
+    # Build the query with all conditions
+    base_query = select(CallLog)
+    
+    # Apply all conditions using AND
+    if conditions:
+        base_query = base_query.where(and_(*conditions))
+    
+    # Apply sorting
+    # Get the sort column, default to CallLog.start_time if not found
+    sort_column = getattr(CallLog, sort_by, CallLog.start_time)
+    if sort_order.lower() == "asc":
+        base_query = base_query.order_by(sort_column.asc())
+    else:
+        base_query = base_query.order_by(sort_column.desc())
+    
+    # Count total matching calls
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total_count = await session.execute(count_query)
+    total = total_count.scalar_one()
+    
+    if total == 0:
+        return {
+            "calls": [],
+            "pagination": {
+                "total": 0,
+                "page": page,
+                "page_size": page_size,
+                "pages": 0
+            }
+        }
+    
+    # Get paginated results
+    offset = (page - 1) * page_size
+    calls_query = base_query.offset(offset).limit(page_size)
+    calls_result = await session.execute(calls_query)
+    calls = calls_result.scalars().all()
+    
+    # Get full call data for each call
+    call_data = []
+    for call in calls:
+        call_data.append(await get_call_with_related_data(session, call.id))
+    
+    return {
+        "calls": call_data,
+        "pagination": {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "pages": (total + page_size - 1) // page_size
+        }
+    }
+
+# Add these missing helper functions:
+
+async def update_call_recording_db(
+    session: AsyncSession,
+    call_id: str,
+    recording_url: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Update call recording URL.
+    
+    Args:
+        session: Database session
+        call_id: Call ID
+        recording_url: URL of the recording
+        
+    Returns:
+        Updated call data if successful, None if call not found
+    """
+    logger.info(f"Updating recording for call: {call_id}")
+    
+    # Update call with the recording URL
+    update_data = {"recording_url": recording_url}
+    
+    update_query = (
+        update(CallLog)
+        .where(CallLog.id == call_id)
+        .values(**update_data)
+    )
+    await session.execute(update_query)
+    await session.commit()
+    
+    return await get_call_with_related_data(session, call_id)
+
+async def update_call_transcript_db(
+    session: AsyncSession,
+    call_id: str,
+    transcript: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Update call transcript.
+    
+    Args:
+        session: Database session
+        call_id: Call ID
+        transcript: Call transcript text
+        
+    Returns:
+        Updated call data if successful, None if call not found
+    """
+    logger.info(f"Updating transcript for call: {call_id}")
+    
+    # Update call with the transcript
+    update_data = {"transcript": transcript}
+    
+    update_query = (
+        update(CallLog)
+        .where(CallLog.id == call_id)
+        .values(**update_data)
+    )
+    await session.execute(update_query)
+    await session.commit()
+    
+    return await get_call_with_related_data(session, call_id)
+
+async def get_scheduled_calls_db(
+    session: AsyncSession,
+    gym_id: str,
+    start_time: datetime,
+    end_time: datetime
+) -> List[Dict[str, Any]]:
+    """
+    Get scheduled calls for a time period.
+    
+    Args:
+        session: Database session
+        gym_id: Gym ID
+        start_time: Start of the time period
+        end_time: End of the time period
+        
+    Returns:
+        List of scheduled call data
+    """
+    logger.info(f"Getting scheduled calls for gym {gym_id} from {start_time} to {end_time}")
+    
+    # Build query for scheduled calls
+    scheduled_calls_query = (
+        select(CallLog)
+        .where(and_(
+            CallLog.gym_id == gym_id,
+            CallLog.call_status == "scheduled",
+            CallLog.start_time >= start_time,
+            CallLog.start_time <= end_time
+        ))
+        .order_by(CallLog.start_time)
+    )
+    
+    # Execute query
+    scheduled_calls_result = await session.execute(scheduled_calls_query)
+    scheduled_calls = scheduled_calls_result.scalars().all()
+    
+    # Get full call data
+    call_data = []
+    for call in scheduled_calls:
+        call_data.append(await get_call_with_related_data(session, call.id))
+    
+    return call_data

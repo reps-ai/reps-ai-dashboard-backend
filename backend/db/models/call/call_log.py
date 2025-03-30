@@ -32,7 +32,7 @@ class CallLog(Base):
     transcript = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     sentiment = Column(String(50), nullable=True)  # positive, negative, neutral
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey("follow_up_campaigns.id"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("follow_up_campaigns.id"), nullable=True)  # Changed to nullable=True
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""

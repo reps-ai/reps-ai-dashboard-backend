@@ -18,7 +18,11 @@ from ....helpers.call.call_queries import (
     get_calls_by_lead_db,
     get_calls_by_date_range_db,
     get_calls_by_outcome_db,
-    update_call_metrics_db
+    update_call_metrics_db,
+    get_filtered_calls_db,
+    update_call_recording_db,  # Add this
+    update_call_transcript_db,  # Add this
+    get_scheduled_calls_db     # Add this
 )
 from .....utils.logging.logger import get_logger
 
@@ -295,6 +299,54 @@ class PostgresCallRepository(CallRepository):
         """
         logger.info(f"Updating metrics for call: {call_id}")
         return await update_call_metrics_db(self.session, call_id, metrics_data)
+
+    async def get_calls_with_filters(
+        self,
+        gym_id: str,
+        page: int = 1,
+        page_size: int = 50,
+        lead_id: Optional[str] = None,
+        campaign_id: Optional[str] = None,
+        direction: Optional[str] = None,
+        outcome: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        """
+        Get calls with combined filtering at the database level.
+        
+        Args:
+            gym_id: ID of the gym (required for security)
+            page: Page number
+            page_size: Page size
+            lead_id: Optional lead ID to filter by
+            campaign_id: Optional campaign ID to filter by
+            direction: Optional call direction to filter by (inbound/outbound)
+            outcome: Optional outcome to filter by
+            start_date: Optional start date for date range filtering
+            end_date: Optional end date for date range filtering
+            
+        Returns:
+            Dictionary containing calls and pagination info
+        """
+        
+        
+        logger.info(f"Getting filtered calls with combined criteria: gym_id={gym_id}, "
+                    f"lead_id={lead_id}, campaign_id={campaign_id}, direction={direction}, "
+                    f"outcome={outcome}")
+        
+        return await get_filtered_calls_db(
+            self.session,
+            gym_id,
+            page,
+            page_size,
+            lead_id=lead_id,
+            campaign_id=campaign_id,
+            direction=direction,
+            outcome=outcome,
+            start_date=start_date,
+            end_date=end_date
+        )
 
     """Optional From this point"""
 
@@ -626,4 +678,4 @@ class PostgresCallRepository(CallRepository):
         """
         logger.info(f"Updating status for call: {call_id}")
         # Placeholder implementation using update_call
-        return await self.update_call(call_id, {"call_status": status}) 
+        return await self.update_call(call_id, {"call_status": status})
