@@ -42,8 +42,19 @@ class DefaultCallService(CallService):
         Returns:
             Dictionary containing call details
             
+
         Raises:
             ValueError: If there's an error triggering the call
+=======
+
+            It doesn't return a dict to the user, we trigger a background task that will take the call data and store it in the database. 
+            After that, we need to update the lead with the call data, so we will call another background task for that.
+            This ensures we don't block the main thread and we can handle the call asynchronously.
+            
+        Raises:
+            ValueError: If there's an error triggering the call
+
+
         """
         try:
             logger.info(f"Triggering call to lead: {lead_id}")
@@ -676,8 +687,26 @@ class DefaultCallService(CallService):
         """
         logger.info(f"Processing recording for call: {call_id}")
         
+        # Check if this should be run as a background task
+        if recording_url and isinstance(recording_url, dict) and recording_url.get("use_background_task", False):
+            # Get the actual URL
+            actual_url = recording_url.get("url", "")
+            
+            # Import here to avoid circular imports
+            from ...tasks.call.task_definitions import process_call_recording as process_recording_task
+            
+            # Queue the task for background processing
+            process_recording_task.delay(call_id, actual_url)
+            
+            # Return minimal information immediately
+            return {"id": call_id, "status": "recording_processing_queued"}
+        
+        # Otherwise, process recording synchronously
+        # Handle the case where recording_url might be a dict from above logic
+        actual_url = recording_url.get("url", "") if isinstance(recording_url, dict) else recording_url
+        
         # Update call recording using repository
-        updated_call = await self.call_repository.update_call_recording(call_id, recording_url)
+        updated_call = await self.call_repository.update_call_recording(call_id, actual_url)
         
         if not updated_call:
             logger.warning(f"Call with ID {call_id} not found")
@@ -700,8 +729,28 @@ class DefaultCallService(CallService):
         """
         logger.info(f"Generating summary for call: {call_id}")
         
+        # Check if this should be run as a background task
+        if transcript and isinstance(transcript, dict) and transcript.get("use_background_task", False):
+            # Get the actual transcript
+            actual_transcript = transcript.get("entries", [])
+            
+            # Import here to avoid circular imports
+            from ...tasks.call.task_definitions import analyze_call_transcript as analyze_transcript_task
+            
+            # Queue the task for background processing
+            analyze_transcript_task.delay(call_id)
+            
+            # Return minimal information immediately
+            return {"id": call_id, "status": "summary_generation_queued"}
+        
+        # Otherwise, process transcript synchronously
         # Convert transcript list to string for storage
-        transcript_text = "\n".join([f"{entry.get('speaker', 'Unknown')}: {entry.get('text', '')}" for entry in transcript])
+        if isinstance(transcript, dict):
+            transcript_entries = transcript.get("entries", [])
+        else:
+            transcript_entries = transcript
+            
+        transcript_text = "\n".join([f"{entry.get('speaker', 'Unknown')}: {entry.get('text', '')}" for entry in transcript_entries])
         
         # Update call transcript using repository
         updated_call = await self.call_repository.update_call_transcript(call_id, transcript_text)
