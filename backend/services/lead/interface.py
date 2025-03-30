@@ -78,6 +78,7 @@ class LeadService(ABC):
         """
         pass
     
+    #clarify if this is required as the above function is already doing the same with sentiment analysis
     @abstractmethod
     async def qualify_lead(self, lead_id: str, qualification: str) -> Dict[str, Any]:
         """
@@ -92,6 +93,7 @@ class LeadService(ABC):
         """
         pass
     
+    #can be integrated with the update_lead function
     @abstractmethod
     async def add_tags_to_lead(self, lead_id: str, tags: List[str]) -> Dict[str, Any]:
         """
@@ -105,6 +107,10 @@ class LeadService(ABC):
             Dictionary containing the updated lead details
         """
         pass
+    
+    #function to update lead details manually can replace many other functions. function should contain all optional parameters to update lead details and update the details of what is passed.
+
+
     
     @abstractmethod
     async def get_leads_by_status(self, gym_id: str, status: str) -> List[Dict[str, Any]]:

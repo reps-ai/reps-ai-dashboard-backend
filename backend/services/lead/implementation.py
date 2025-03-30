@@ -41,10 +41,10 @@ class DefaultLeadService(LeadService):
             raise ValueError(f"Lead not found: {lead_id}")
         return lead
     
-    #Background Task
+    #Foreground Task
     async def update_lead(self, lead_id: str, lead_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Update lead information.
+        Update lead information. When the user wants to through the user interface
         
         Args:
             lead_id: ID of the lead to update
@@ -53,6 +53,9 @@ class DefaultLeadService(LeadService):
         Returns:
             Dictionary containing the updated lead details
         """
+        # For immediate lightweight response
+        
+        # Otherwise, perform the update synchronously
         # Set updated_at timestamp
         lead_data["updated_at"] = datetime.now()
         
@@ -94,7 +97,7 @@ class DefaultLeadService(LeadService):
         logger.info(f"Retrieved {len(leads)} prioritized leads for gym: {gym_id}")
         return leads
     
-    #Background Task
+    #Background Task -> Purely a background task, after the call is made, we need to take that information and update the lead.
     async def update_lead_after_call(self, lead_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update lead information after a call.
@@ -112,6 +115,21 @@ class DefaultLeadService(LeadService):
         Returns:
             Dictionary containing the updated lead details
         """
+        # For immediate lightweight response
+        if call_data.get("use_background_task", False):
+            # Import here to avoid circular imports
+            from ...tasks.lead.task_definitions import update_lead_after_call as update_lead_after_call_task
+            
+            # Remove the flag to avoid recursion or persistence in the data
+            call_data.pop("use_background_task", None)
+            
+            # Queue the task for background processing
+            update_lead_after_call_task.delay(lead_id, call_data)
+            
+            # Return minimal information immediately
+            return {"id": lead_id, "status": "update_after_call_queued"}
+        
+        # Otherwise, perform the update synchronously
         # Validate call data
         if "call_id" not in call_data:
             raise ValueError("Call ID is required")
@@ -145,21 +163,40 @@ class DefaultLeadService(LeadService):
         Returns:
             Dictionary containing the updated lead details
         """
+        # For immediate lightweight response when explicitly requested
+        if isinstance(qualification, dict) and qualification.get("use_background_task", False):
+            # Extract the actual qualification value
+            qual_value = qualification.get("value")
+            
+            # Import here to avoid circular imports
+            from ...tasks.lead.task_definitions import qualify_lead as qualify_lead_task
+            
+            # Queue the task for background processing
+            qualify_lead_task.delay(lead_id, qual_value)
+            
+            # Return minimal information immediately
+            return {"id": lead_id, "status": "qualification_queued"}
+        
+        # Otherwise, process qualification synchronously
         # Validate qualification
         valid_qualifications = ["hot", "cold", "neutral"]
-        if qualification not in valid_qualifications:
-            raise ValueError(f"Invalid qualification: {qualification}. Must be one of {valid_qualifications}")
+        
+        # Handle the case where qualification might be a dict from above logic
+        qual_value = qualification.get("value") if isinstance(qualification, dict) else qualification
+        
+        if qual_value not in valid_qualifications:
+            raise ValueError(f"Invalid qualification: {qual_value}. Must be one of {valid_qualifications}")
         
         # Update qualification
-        lead = await self.lead_repository.update_lead_qualification(lead_id, qualification)
+        lead = await self.lead_repository.update_lead_qualification(lead_id, qual_value)
         
         if not lead:
             raise ValueError(f"Lead not found: {lead_id}")
         
-        logger.info(f"Updated lead qualification: {lead_id} -> {qualification}")
+        logger.info(f"Updated lead qualification: {lead_id} -> {qual_value}")
         return lead
     
-    #Background Task
+    #Manually Adding Tag -> Foreground Task, Automatically Adding Tag -> Background Task 
     async def add_tags_to_lead(self, lead_id: str, tags: List[str]) -> Dict[str, Any]:
         """
         Add tags to a lead.
@@ -171,17 +208,35 @@ class DefaultLeadService(LeadService):
         Returns:
             Dictionary containing the updated lead details
         """
-        # Validate tags
-        if not tags:
+        # For immediate lightweight response
+        # Check if tags is actually a dict with use_background_task flag
+        if isinstance(tags, dict) and tags.get("use_background_task", False):
+            # Extract the actual tags
+            tag_list = tags.get("values", [])
+            
+            # Import here to avoid circular imports
+            from ...tasks.lead.task_definitions import add_tags_to_lead as add_tags_task
+            
+            # Queue the task for background processing
+            add_tags_task.delay(lead_id, tag_list)
+            
+            # Return minimal information immediately
+            return {"id": lead_id, "status": "add_tags_queued"}
+        
+        # Otherwise, process tags synchronously
+        # Validate tags, handling the case where tags might be a dict from above logic
+        tag_list = tags.get("values", []) if isinstance(tags, dict) else tags
+        
+        if not tag_list:
             return await self.get_lead(lead_id)
         
         # Add tags
-        lead = await self.lead_repository.add_tags_to_lead(lead_id, tags)
+        lead = await self.lead_repository.add_tags_to_lead(lead_id, tag_list)
         
         if not lead:
             raise ValueError(f"Lead not found: {lead_id}")
         
-        logger.info(f"Added tags to lead: {lead_id} -> {tags}")
+        logger.info(f"Added tags to lead: {lead_id} -> {tag_list}")
         return lead
     
     async def get_leads_by_status(self, gym_id: str, status: str) -> List[Dict[str, Any]]:
@@ -211,7 +266,7 @@ class DefaultLeadService(LeadService):
         Get paginated leads for a gym with optional filters.
         
         Args:
-            gym_id: ID of the gym
+            branch_id: ID of the branch
             page: Page number (1-based)
             page_size: Number of leads per page
             filters: Optional dictionary of filter criteria
