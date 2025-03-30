@@ -42,12 +42,14 @@ engine = create_async_engine(
 # Configure the async session maker
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 
-from contextlib import asynccontextmanager
-
-@asynccontextmanager
-async def get_db():
-    db = SessionLocal()
+# This function should be used as a FastAPI dependency
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Get a database session as a dependency.
+    For use with FastAPI's dependency injection system.
+    """
+    session = SessionLocal()
     try:
-        yield db
+        yield session
     finally:
-        await db.close()
+        await session.close()

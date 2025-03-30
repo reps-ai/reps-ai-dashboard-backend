@@ -2,12 +2,13 @@ from pydantic import BaseModel, Field, validator, constr
 from typing import Optional
 from datetime import datetime
 from app.schemas.common.call_types import CallDirection, CallStatus, CallOutcome
+import uuid
 
 class CallBase(BaseModel):
-    lead_id: constr(min_length=1) = Field(
+    lead_id: uuid.UUID = Field(
         ..., 
         description="ID of the lead associated with this call",
-        example="lead-123"
+        example="123e4567-e89b-12d3-a456-426614174000"
     )
     direction: str = Field(
         ..., 
@@ -19,10 +20,10 @@ class CallBase(BaseModel):
         description="Additional notes about the call",
         example="Customer was interested in membership options"
     )
-    campaign_id: Optional[constr(min_length=1)] = Field(
+    campaign_id: Optional[uuid.UUID] = Field(
         None, 
         description="ID of the campaign this call is part of",
-        example="campaign-456"
+        example="123e4567-e89b-12d3-a456-426614174000"
     )
     
     @validator('direction')
@@ -36,10 +37,10 @@ class CallBase(BaseModel):
         use_enum_values = True
         schema_extra = {
             "example": {
-                "lead_id": "lead-123",
+                "lead_id": "123e4567-e89b-12d3-a456-426614174000",
                 "direction": "outbound",
                 "notes": "Customer was interested in membership options",
-                "campaign_id": "campaign-456"
+                "campaign_id": "123e4567-e89b-12d3-a456-426614174000"
             }
         }
 
@@ -63,10 +64,10 @@ class CallCreate(CallBase):
     class Config:
         schema_extra = {
             "example": {
-                "lead_id": "lead-123",
+                "lead_id": "123e4567-e89b-12d3-a456-426614174000",
                 "direction": "outbound",
                 "notes": "Follow up on previous inquiry",
-                "campaign_id": "campaign-456",
+                "campaign_id": "123e4567-e89b-12d3-a456-426614174000",
                 "scheduled_time": "2025-03-23T10:30:00Z"
             }
         }

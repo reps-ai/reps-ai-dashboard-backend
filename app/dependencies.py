@@ -2,13 +2,15 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
 
 # Import the necessary service and repository
 from backend.services.call.implementation import DefaultCallService
 from backend.db.repositories.call.implementations.postgres_call_repository import PostgresCallRepository
-from backend.db.database import get_db
+from backend.db.connections.database import get_db
+from backend.services.call.factory import create_call_service
 
 from backend.services.lead.implementation import DefaultLeadService
 from backend.db.repositories.lead.implementations import PostgresLeadRepository
@@ -16,7 +18,7 @@ from backend.db.repositories.lead.implementations import PostgresLeadRepository
 
 
 # OAuth2 setup
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
 
 # Mock User model for now
 class User(BaseModel):
@@ -28,14 +30,14 @@ class User(BaseModel):
 
 # Mock Gym model
 class Gym(BaseModel):
-    id: int
+    id: uuid.UUID
     name: str
     # Add other gym fields as needed
 
 # Mock Branch model
 class Branch(BaseModel):
-    id: int
-    gym_id: int
+    id: uuid.UUID
+    gym_id: uuid.UUID
     name: str
     # Add other branch fields as needed
 
@@ -43,92 +45,59 @@ class Branch(BaseModel):
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+# Create mock objects for testing
+MOCK_USER_ID = 1
+MOCK_GYM_ID = uuid.UUID("facd154c-9be8-40fb-995f-27ea665d3a8b")  # Valid gym ID
+MOCK_BRANCH_ID = uuid.UUID("8d8808a4-22f8-4af3-aec4-bab5b44b1aa7")  # Valid branch ID
+
+async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> User:
     """
-    Dependency to get the current authenticated user from a JWT token.
+    TESTING MODE: Always returns a mock user without authentication.
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+    # For testing, bypass token validation and return a mock user
+    return User(
+        id=MOCK_USER_ID,
+        email="test@example.com",
+        full_name="Test User",
+        is_admin=True,
+        gym_id=1  # This will match with the mock gym below
     )
-    
-    try:
-        # Decode JWT token
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        
-        if user_id is None:
-            raise credentials_exception
-        
-        # In a real app, you'd fetch the user from the database
-        # For now, return a mock user
-        return User(
-            id=user_id,
-            email=payload.get("email", "user@example.com"),
-            full_name=payload.get("name", "John Doe"),
-            is_admin=payload.get("is_admin", False),
-            gym_id=payload.get("gym_id")
-        )
-    except JWTError:
-        raise credentials_exception
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
-    Dependency to ensure the user is an admin.
+    TESTING MODE: Always returns an admin user.
     """
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions"
-        )
+    # For testing, ensure user is always an admin
+    current_user.is_admin = True
     return current_user
 
 async def get_current_gym(current_user: User = Depends(get_current_user)) -> Gym:
     """
-    Dependency to get the current gym based on the authenticated user.
+    TESTING MODE: Always returns a mock gym without checking user association.
     
-    This ensures that users can only access data from their own gym.
-    In a real application, you would fetch the gym from the database.
+    In testing mode, this will accept any gym ID to allow accessing data across gyms.
     """
-    if current_user.gym_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User is not associated with any gym"
-        )
-    
-    # In a real app, you'd fetch the gym from the database using current_user.gym_id
-    # For now, return a mock gym
+    # For testing, return a mock gym without verification
     return Gym(
-        id=current_user.gym_id,
-        name="Example Gym"
+        id=MOCK_GYM_ID,
+        name="Test Gym"
     )
 
 async def get_current_branch(
-    branch_id: int,
+    branch_id: Optional[Union[uuid.UUID, int, str]] = None,
     current_gym: Gym = Depends(get_current_gym)
 ) -> Branch:
     """
-    Dependency to get a specific branch within the current gym.
-    
-    This ensures that users can only access branches that belong to their gym.
-    In a real application, you would fetch the branch from the database
-    and verify it belongs to the current gym.
+    TESTING MODE: Always returns a mock branch without verifying ownership.
     """
-    # In a real app, you'd fetch the branch from the database
-    # and verify it belongs to current_gym.id
-    
-    # Mock verification - in a real app, this would be a database query
-    if branch_id % 100 != current_gym.id % 100:  # Just a mock check
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Branch not found or does not belong to your gym"
-        )
-    
+    # For testing, return a mock branch without verification
     return Branch(
-        id=branch_id,
+        id=MOCK_BRANCH_ID if branch_id is None else (
+            branch_id if isinstance(branch_id, uuid.UUID) else uuid.UUID(str(branch_id)) 
+            if isinstance(branch_id, (str, int)) and str(branch_id) else MOCK_BRANCH_ID
+        ),
         gym_id=current_gym.id,
-        name=f"Branch {branch_id}"
+        name="Test Branch"
     )
 
 async def get_call_service(db: AsyncSession = Depends(get_db)) -> DefaultCallService:
@@ -136,9 +105,7 @@ async def get_call_service(db: AsyncSession = Depends(get_db)) -> DefaultCallSer
     Dependency to get the call service instance with properly initialized repository.
     """
     call_repository = PostgresCallRepository(db)
-    call_service = DefaultCallService(call_repository)
-
-    return call_service
+    return create_call_service(call_repository=call_repository)
 
 async def get_lead_service(db: AsyncSession = Depends(get_db)) -> DefaultLeadService:
     """
@@ -146,6 +113,4 @@ async def get_lead_service(db: AsyncSession = Depends(get_db)) -> DefaultLeadSer
     """
     lead_repository = PostgresLeadRepository(db)
     return DefaultLeadService(lead_repository)
-
-    return call_service
 

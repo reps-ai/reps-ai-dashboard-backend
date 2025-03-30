@@ -4,6 +4,7 @@ Interface for the Call Processing Service.
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import uuid
 
 class CallService(ABC):
     """
@@ -11,7 +12,7 @@ class CallService(ABC):
     """
     
     @abstractmethod
-    async def trigger_call(self, lead_id: str, campaign_id: Optional[str] = None, lead_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def trigger_call(self, lead_id: uuid.UUID, campaign_id: Optional[uuid.UUID] = None, lead_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Trigger a call to a lead.
         
@@ -26,7 +27,7 @@ class CallService(ABC):
         pass
     
     @abstractmethod
-    async def get_call(self, call_id: str) -> Dict[str, Any]:
+    async def get_call(self, call_id: uuid.UUID) -> Dict[str, Any]:
         """
         Get call details by ID.
         
@@ -39,7 +40,7 @@ class CallService(ABC):
         pass
     
     @abstractmethod
-    async def update_call(self, call_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_call(self, call_id: uuid.UUID, call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update call information.
         
@@ -53,7 +54,7 @@ class CallService(ABC):
         pass
     
     @abstractmethod
-    async def process_call_recording(self, call_id: str, recording_url: str) -> Dict[str, Any]:
+    async def process_call_recording(self, call_id: uuid.UUID, recording_url: str) -> Dict[str, Any]:
         """
         Process a call recording.
         

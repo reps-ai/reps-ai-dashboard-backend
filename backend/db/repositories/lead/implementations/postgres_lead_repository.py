@@ -47,7 +47,11 @@ class PostgresLeadRepository(LeadRepository):
     #Works
     async def get_lead_by_id(self, lead_id: str) -> Optional[Dict[str, Any]]:
         """Get lead details by ID."""
-        return await get_lead_with_related_data(self.session, lead_id)
+        try:
+            return await get_lead_with_related_data(self.session, lead_id)
+        except Exception as e:
+            logger.error(f"Error getting lead by ID {lead_id}: {str(e)}")
+            raise
     
     #Works
     async def update_lead(self, lead_id: str, lead_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:

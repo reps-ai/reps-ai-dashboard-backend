@@ -33,6 +33,7 @@ class CallLog(Base):
     summary = Column(Text, nullable=True)
     sentiment = Column(String(50), nullable=True)  # positive, negative, neutral
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("follow_up_campaigns.id"), nullable=True)  # Changed to nullable=True
+    external_call_id = Column(String(100), nullable=True)  # For storing external call IDs (Retell call_id)
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -54,7 +55,8 @@ class CallLog(Base):
             "transcript": self.transcript,
             "summary": self.summary,
             "sentiment": self.sentiment,
-            "campaign_id": self.campaign_id
+            "campaign_id": self.campaign_id,
+            "external_call_id": self.external_call_id
         }
 
 from backend.db.models.lead.lead import Lead

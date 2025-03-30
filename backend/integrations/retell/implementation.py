@@ -4,6 +4,7 @@ import os
 import json
 from typing import Dict, Any, List, Optional
 import asyncio
+import uuid
 
 class RetellImplementation(RetellIntegration):
     """
@@ -12,7 +13,6 @@ class RetellImplementation(RetellIntegration):
     
     def __init__(self):
         """Initialize the Retell client with API key from environment variables."""
-        self.base_url = "https://api.retell.ai/v1"
         self.api_key = os.getenv("RETELL_API_KEY")
         
         if not self.api_key:
@@ -39,7 +39,7 @@ class RetellImplementation(RetellIntegration):
     async def create_call(
         self, 
         lead_data: Dict[str, Any], 
-        campaign_id: Optional[str] = None,
+        campaign_id: Optional[uuid.UUID] = None,
         max_duration: Optional[int] = None
     ) -> Dict[str, Any]:
         """
@@ -58,6 +58,14 @@ class RetellImplementation(RetellIntegration):
             to_number = lead_data.get("phone_number")
             if not to_number:
                 raise ValueError("Lead data does not contain a valid phone number")
+                
+            # Clean phone number if needed (remove non-numeric characters)
+            if isinstance(to_number, str):
+                to_number = ''.join(filter(str.isdigit, to_number))
+                
+            # Ensure it's at least 10 digits
+            if len(to_number) < 10:
+                raise ValueError(f"Phone number {to_number} is too short (min 10 digits)")
             
             # Get the 'from' number from environment variables
             from_number = os.getenv("RETELL_FROM_NUMBER")
@@ -72,8 +80,7 @@ class RetellImplementation(RetellIntegration):
             # Prepare call parameters
             call_params = {
                 "from_number": from_number,
-                "to_number": to_number,
-                "agent_id": agent_id,
+                "to_number": to_number
             }
             
             # Add optional parameters
@@ -83,13 +90,23 @@ class RetellImplementation(RetellIntegration):
             # Add metadata from lead and campaign
             metadata = {}
             if lead_data:
-                metadata["lead_id"] = lead_data.get("id")
-                metadata["lead_name"] = lead_data.get("name")
-                metadata["gym_id"] = lead_data.get("gym_id")
-                metadata["branch_id"] = lead_data.get("branch_id")
+                # Convert all UUID objects to strings for metadata
+                lead_id = lead_data.get("id")
+                if lead_id:
+                    metadata["lead_id"] = str(lead_id)
+                    
+                metadata["lead_name"] = lead_data.get("name") or "Unknown"
+                
+                gym_id = lead_data.get("gym_id")
+                if gym_id:
+                    metadata["gym_id"] = str(gym_id)
+                    
+                branch_id = lead_data.get("branch_id")
+                if branch_id:
+                    metadata["branch_id"] = str(branch_id)
                 
             if campaign_id:
-                metadata["campaign_id"] = campaign_id
+                metadata["campaign_id"] = str(campaign_id)
                 
             if metadata:
                 call_params["metadata"] = metadata
@@ -101,8 +118,16 @@ class RetellImplementation(RetellIntegration):
             
             if dynamic_vars:
                 call_params["retell_llm_dynamic_variables"] = dynamic_vars
+                
+            # Log the parameters we're sending to Retell
+            print(f"Creating Retell call with parameters: {call_params}")
             
             # Make the API call to create the phone call
+            # Update to use llm_id instead of agent_id in the API call
+            if "agent_id" in call_params:
+                # Replace agent_id with llm_id
+                call_params["llm_id"] = call_params.pop("agent_id")
+                
             response = self.client.call.create_phone_call(**call_params)
             
             # Convert response to dictionary
@@ -120,9 +145,114 @@ class RetellImplementation(RetellIntegration):
             # Add additional context
             response_dict["lead_data"] = lead_data
             if campaign_id:
-                response_dict["campaign_id"] = campaign_id
+                response_dict["campaign_id"] = str(campaign_id)
             
             return response_dict
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "lead_data": lead_data
+            }
+
+    async def create_and_log_call(
+        self, 
+        lead_data: Dict[str, Any], 
+        campaign_id: Optional[uuid.UUID] = None,
+        max_duration: Optional[int] = None,
+        call_repository = None
+    ) -> Dict[str, Any]:
+        """
+        Create a call in Retell and log it in the application database.
+        
+        Args:
+            lead_data: Dictionary containing lead information
+            campaign_id: Optional ID of the campaign
+            max_duration: Optional maximum duration in seconds
+            call_repository: Optional repository for creating call logs
+            
+        Returns:
+            Dictionary containing call details
+        """
+        try:
+            # Create the call in Retell
+            retell_response = await self.create_call(lead_data, campaign_id, max_duration)
+            
+            if retell_response.get("status") == "error":
+                return retell_response
+            
+            # If call repository is provided, update the call log
+            if call_repository:
+                # Get the call_id from the retell response
+                external_call_id = retell_response.get("call_id")
+                if not external_call_id:
+                    return {
+                        "status": "error",
+                        "message": "No call ID returned from Retell",
+                        "retell_response": retell_response
+                    }
+                
+                # Update the existing call with Retell's external ID
+                # The implementation expects that a call record was already created in trigger_call
+                # before calling this method
+                
+                # Find the call we need to update
+                # Note: We don't have the internal call ID here, but we can use the lead_id and timestamp
+                # to identify the most recent call for this lead
+                lead_id = lead_data.get("id")
+                if not isinstance(lead_id, uuid.UUID):
+                    # Convert to UUID if it's not already
+                    try:
+                        lead_id = uuid.UUID(str(lead_id))
+                    except ValueError:
+                        return {
+                            "status": "error", 
+                            "message": f"Invalid lead_id format: {lead_id}"
+                        }
+                
+                calls_result = await call_repository.get_calls_by_lead(lead_id, page=1, page_size=1)
+                calls = calls_result.get("calls", [])
+                
+                if not calls:
+                    # If no existing call is found (shouldn't happen in normal flow), log a warning
+                    return {
+                        "status": "warning",
+                        "message": "No existing call found to update with Retell information",
+                        "external_call_id": external_call_id,
+                        "lead_id": str(lead_id),
+                        "call_status": retell_response.get("call_status", "initiated")
+                    }
+                
+                internal_call_id = calls[0].get("id")
+                if not isinstance(internal_call_id, uuid.UUID):
+                    # Convert to UUID if it's not already
+                    try:
+                        internal_call_id = uuid.UUID(str(internal_call_id))
+                    except ValueError:
+                        return {
+                            "status": "error", 
+                            "message": f"Invalid internal_call_id format: {internal_call_id}"
+                        }
+                
+                # Update the call in the database with Retell information
+                call_update_data = {
+                    "external_call_id": external_call_id,
+                    "call_status": retell_response.get("call_status", "initiated")
+                }
+                
+                updated_call = await call_repository.update_call(internal_call_id, call_update_data)
+                
+                # Combine responses
+                result = {
+                    **retell_response,
+                    "call_id": str(internal_call_id),
+                    "call_status": updated_call.get("call_status")
+                }
+                
+                return result
+            
+            return retell_response
             
         except Exception as e:
             return {
@@ -241,7 +371,7 @@ class RetellImplementation(RetellIntegration):
             # Process different event types
             if event == "call_started":
                 return {
-                    "event_type": "call.started",
+                    "event_type": "call_started",
                     "call_id": call_id,
                     "call_status": "in_progress",
                     "timestamp": call_data.get("start_timestamp"),
@@ -250,7 +380,7 @@ class RetellImplementation(RetellIntegration):
                 
             elif event == "call_ended":
                 return {
-                    "event_type": "call.ended",
+                    "event_type": "call_ended",
                     "call_id": call_id,
                     "call_status": "completed",
                     "duration": (call_data.get("end_timestamp", 0) - call_data.get("start_timestamp", 0)) / 1000 if call_data.get("start_timestamp") else 0,
@@ -265,7 +395,7 @@ class RetellImplementation(RetellIntegration):
                 analysis = call_data.get("call_analysis", {})
                 
                 return {
-                    "event_type": "call.analyzed",
+                    "event_type": "call_analyzed",
                     "call_id": call_id,
                     "summary": analysis.get("call_summary"),
                     "sentiment": analysis.get("user_sentiment"),

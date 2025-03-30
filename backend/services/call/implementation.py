@@ -4,13 +4,13 @@ Implementation of the Call Management Service.
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import json
-
+import uuid
 from .interface import CallService
 from ...db.repositories.call import CallRepository
 from ...utils.logging.logger import get_logger
 from ...integrations.retell.interface import RetellIntegration
 from ...db.models.call.call_log import CallLog  # Import the CallLog model for type hints
-
+from ...db.helpers.lead.lead_queries import get_lead_with_related_data
 logger = get_logger(__name__)
 
 class DefaultCallService(CallService):
@@ -30,56 +30,29 @@ class DefaultCallService(CallService):
         self.retell_integration = retell_integration
     
     #Aditya
-    async def trigger_call(self, lead_id: str, campaign_id: Optional[str] = None, lead_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def trigger_call(self, lead_id: uuid.UUID, campaign_id: Optional[uuid.UUID] = None, lead_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Trigger a call to a lead.
         
         Args:
             lead_id: ID of the lead to call
-            campaign_id: Optional ID of the campaign
-            lead_data: Optional pre-loaded lead data
+            campaign_id: Optional ID of the campaign (defaults to None)
+            lead_data: Optional pre-loaded lead data (defaults to None)
             
         Returns:
             Dictionary containing call details
             
-
         Raises:
             ValueError: If there's an error triggering the call
-=======
-
-            It doesn't return a dict to the user, we trigger a background task that will take the call data and store it in the database. 
-            After that, we need to update the lead with the call data, so we will call another background task for that.
-            This ensures we don't block the main thread and we can handle the call asynchronously.
-            
-        Raises:
-            ValueError: If there's an error triggering the call
-
-
         """
         try:
             logger.info(f"Triggering call to lead: {lead_id}")
-            
-            # Get lead data if not provided
-            if not lead_data:
-                # In a real implementation, fetch lead data from the repository
-                # Example: lead_data = await lead_repository.get_lead_by_id(lead_id)
-                
-                # For now, create a placeholder with minimal required data
-                # You should replace this with actual lead data retrieval
-                lead_data = {
-                    "id": lead_id,
-                    "phone_number": "PLACEHOLDER-PHONE-NUMBER",  # Replace with actual phone number
-                    "name": "Placeholder Name",  # Replace with actual name
-                    "gym_id": "PLACEHOLDER-GYM-ID",  # Replace with actual gym ID
-                    "branch_id": "PLACEHOLDER-BRANCH-ID",  # Replace with actual branch ID
-                    "interest": "PLACEHOLDER-INTEREST"  # Replace with actual interest
-                }
-            
-            # Create initial call log entry in database
+            lead_data = await get_lead_with_related_data(self.call_repository.session, lead_id)
+            # Create basic call data with valid IDs - simplifying to just what we need
             call_data = {
-                "lead_id": lead_id,
-                "gym_id": lead_data.get("gym_id"),
-                "branch_id": lead_data.get("branch_id"),
+                "lead_id": lead_id,  # Already UUID
+                "gym_id": lead_data["gym_id"],  # Valid gym ID
+                "branch_id": lead_data["branch_id"],  # Valid branch ID
                 "call_status": "scheduled",
                 "call_type": "outbound",
                 "created_at": datetime.now(),
@@ -88,60 +61,75 @@ class DefaultCallService(CallService):
             
             if campaign_id:
                 call_data["campaign_id"] = campaign_id
+            else:
+                # Use default campaign ID if none provided
+                call_data["campaign_id"] = uuid.UUID("9427e0d4-bede-479c-a07a-2078592c6cd5")
             
-            # Create call using repository (initial database entry)
+            # Log the data we're inserting
+            logger.info(f"Creating call with data: {call_data}")
+            
+            # Create call record in database
             db_call = await self.call_repository.create_call(call_data)
-            logger.info(f"Created initial call record with ID: {db_call.get('id')}")
+            logger.info(f"Created call record with ID: {db_call.get('id')}")
             
-            # If Retell integration is available, use it to make the call
+            # Create minimal lead data needed for Retell
+            minimal_lead_data = {
+                "id": lead_id,
+                "phone_number": lead_data.get("phone", "12345678900"),
+                "name": lead_data.get("name", "Test Customer"),
+                "gym_id": lead_data.get("gym_id", call_data["gym_id"]),
+                "branch_id": lead_data.get("branch_id", call_data["branch_id"])
+            }
+            
+            # If Retell integration is available, trigger the call
             if self.retell_integration:
                 try:
-                    # Set max duration if needed (could be based on campaign settings)
-                    max_duration = None
-                    
-                    # Make the actual call using Retell
+                    # Make the call using Retell
                     retell_call_result = await self.retell_integration.create_call(
-                        lead_data=lead_data,
-                        campaign_id=campaign_id,
-                        max_duration=max_duration
+                        lead_data=minimal_lead_data,
+                        campaign_id=call_data["campaign_id"]
                     )
                     
                     if retell_call_result.get("status") == "error":
                         # Handle error from Retell
                         logger.error(f"Error from Retell: {retell_call_result.get('message')}")
                         error_update = {
-                            "call_status": "error"
+                            "call_status": "error",
+                            "human_notes": f"Retell error: {retell_call_result.get('message')}"
                         }
                         error_call = await self.call_repository.update_call(db_call["id"], error_update)
                         return error_call
                     
-                    # Update the call data with Retell specific information
+                    # Update the call with Retell information
                     update_data = {
                         "call_status": retell_call_result.get("call_status", "scheduled"),
                         "external_call_id": retell_call_result.get("call_id")
                     }
                     
-                    # Update the call in our database
+                    # Update call record
                     updated_call = await self.call_repository.update_call(db_call["id"], update_data)
-                    
-                    # Return the updated call
-                    logger.info(f"Triggered call with Retell, call ID: {db_call.get('id')}, external ID: {retell_call_result.get('call_id')}")
+                    logger.info(f"Triggered call with Retell, call ID: {db_call.get('id')}")
                     return updated_call
                     
                 except Exception as e:
-                    # Handle any errors from the Retell integration
+                    # Handle any errors
                     logger.error(f"Error triggering call with Retell: {str(e)}")
-                    
-                    # Update call status to error
                     error_update = {
-                        "call_status": "error"
+                        "call_status": "error",
+                        "human_notes": f"Retell integration error: {str(e)}"
                     }
-                    
                     error_call = await self.call_repository.update_call(db_call["id"], error_update)
                     return error_call
-            
-            logger.info(f"Triggered call with ID: {db_call.get('id')} (no Retell integration used)")
-            return db_call
+            else:
+                # No Retell integration available
+                update_data = {
+                    "call_status": "pending",
+                    "human_notes": "Call created without Retell integration. Manual handling required."
+                }
+                updated_call = await self.call_repository.update_call(db_call["id"], update_data)
+                logger.warning(f"Created call with ID: {db_call.get('id')} but no Retell integration available")
+                return updated_call
+                
         except Exception as e:
             logger.error(f"Error in trigger_call: {str(e)}")
             raise ValueError(f"Failed to trigger call: {str(e)}")
