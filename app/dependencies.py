@@ -3,6 +3,12 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# Import the necessary service and repository
+from backend.services.call.implementation import DefaultCallService
+from backend.db.repositories.call.implementations.postgres_call_repository import PostgresCallRepository
+from backend.db.database import get_db
 
 # OAuth2 setup
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
@@ -118,4 +124,12 @@ async def get_current_branch(
         id=branch_id,
         gym_id=current_gym.id,
         name=f"Branch {branch_id}"
-    ) 
+    )
+
+async def get_call_service(db: AsyncSession = Depends(get_db)) -> DefaultCallService:
+    """
+    Dependency to get the call service instance with properly initialized repository.
+    """
+    call_repository = PostgresCallRepository(db)
+    call_service = DefaultCallService(call_repository)
+    return call_service
