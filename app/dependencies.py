@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Import the necessary service and repository
 from backend.services.call.implementation import DefaultCallService
 from backend.db.repositories.call.implementations.postgres_call_repository import PostgresCallRepository
-from backend.db.database import get_db
+from backend.db.connections.database import get_db
 
 from backend.services.lead.implementation import DefaultLeadService
 from backend.db.repositories.lead.implementations import PostgresLeadRepository
