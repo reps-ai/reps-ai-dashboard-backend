@@ -10,6 +10,11 @@ from backend.services.call.implementation import DefaultCallService
 from backend.db.repositories.call.implementations.postgres_call_repository import PostgresCallRepository
 from backend.db.database import get_db
 
+from backend.services.lead.implementation import DefaultLeadService
+from backend.db.repositories.lead.implementations import PostgresLeadRepository
+
+
+
 # OAuth2 setup
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
@@ -132,4 +137,15 @@ async def get_call_service(db: AsyncSession = Depends(get_db)) -> DefaultCallSer
     """
     call_repository = PostgresCallRepository(db)
     call_service = DefaultCallService(call_repository)
+
     return call_service
+
+async def get_lead_service(db: AsyncSession = Depends(get_db)) -> DefaultLeadService:
+    """
+    Dependency to get the lead service instance with properly initialized repository.
+    """
+    lead_repository = PostgresLeadRepository(db)
+    return DefaultLeadService(lead_repository)
+
+    return call_service
+

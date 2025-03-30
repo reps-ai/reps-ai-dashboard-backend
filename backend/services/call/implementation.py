@@ -43,12 +43,17 @@ class DefaultCallService(CallService):
             Dictionary containing call details
             
 
+        Raises:
+            ValueError: If there's an error triggering the call
+=======
+
             It doesn't return a dict to the user, we trigger a background task that will take the call data and store it in the database. 
             After that, we need to update the lead with the call data, so we will call another background task for that.
             This ensures we don't block the main thread and we can handle the call asynchronously.
             
         Raises:
             ValueError: If there's an error triggering the call
+
 
         """
         try:
