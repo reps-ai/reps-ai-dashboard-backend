@@ -7,7 +7,7 @@ from app.schemas.appointments.responses import AppointmentResponse, AppointmentD
 
 router = APIRouter()
 
-@router.get("", response_model=AppointmentListResponse)
+@router.get("/", response_model=AppointmentListResponse)
 async def get_appointments(
     current_gym: Gym = Depends(get_current_gym),
     lead_id: Optional[str] = None,
@@ -60,7 +60,7 @@ async def get_appointment(
     # 2. Verify it belongs to current_gym.id
     pass
 
-@router.post("", response_model=AppointmentResponse)
+@router.post("/", response_model=AppointmentResponse)
 async def create_appointment(
     appointment: AppointmentCreate = Body(...),
     current_gym: Gym = Depends(get_current_gym)

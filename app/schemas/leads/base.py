@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, EmailStr, validator
 from typing import Optional, List, Union
 from app.schemas.common.lead_types import Tag, LeadStatus, LeadSource
 import re
+import uuid
 
 class LeadBase(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=50, 
@@ -16,7 +17,7 @@ class LeadBase(BaseModel):
     interest: Optional[str] = Field(None, description="Lead's area of interest", 
                                  example="Personal Training")
     interest_location: Optional[str] = Field(None, description="Preferred gym location")
-    branch_id: str = Field(..., description="ID of the branch this lead is associated with")
+    branch_id: uuid.UUID = Field(..., description="ID of the branch this lead is associated with")
     source: str = Field(..., description="Source of the lead", example="website")
     
     @validator('phone')
@@ -44,7 +45,7 @@ class LeadBase(BaseModel):
         use_enum_values = True
 
 class LeadCreate(LeadBase):
-    tags: List[str] = Field(default_factory=list, description="List of tag IDs to associate with the lead")
+    tags: List[uuid.UUID] = Field(default_factory=list, description="List of tag IDs to associate with the lead")
 
 class LeadUpdate(LeadBase):
     first_name: Optional[str] = Field(None, min_length=1, max_length=50, 
@@ -53,7 +54,7 @@ class LeadUpdate(LeadBase):
                                  description="Lead's last name")
     phone: Optional[str] = Field(None, description="Lead's phone number")
     status: Optional[str] = Field(None, description="Current status of the lead")
-    branch_id: Optional[str] = Field(None, description="ID of the branch")
+    branch_id: Optional[uuid.UUID] = Field(None, description="ID of the branch")
     source: Optional[str] = Field(None, description="Source of the lead")
     
     # Validators are inherited from LeadBase

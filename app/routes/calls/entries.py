@@ -1,19 +1,22 @@
 from fastapi import APIRouter, Depends, Query, Path, Body, HTTPException, status
-from app.dependencies import get_current_user, get_current_gym, Gym, get_call_service
+from app.dependencies import get_current_user, get_current_gym, Gym, get_call_service, get_current_branch, Branch
 from typing import Optional
 from datetime import datetime
+import uuid
+import logging
 
 from app.schemas.calls.base import CallCreate, CallUpdate
 from app.schemas.calls.responses import CallListResponse, CallResponse, CallDetailResponse
 from backend.services.call.implementation import DefaultCallService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-@router.get("", response_model=CallListResponse)
+@router.get("/", response_model=CallListResponse)
 async def get_calls(
     current_gym: Gym = Depends(get_current_gym),
-    lead_id: Optional[str] = None,
-    campaign_id: Optional[str] = None,
+    lead_id: Optional[uuid.UUID] = None,
+    campaign_id: Optional[uuid.UUID] = None,
     direction: Optional[str] = None,
     outcome: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -67,7 +70,7 @@ async def get_calls(
 
 @router.get("/{call_id}", response_model=CallDetailResponse)
 async def get_call(
-    call_id: str = Path(..., description="The ID of the call to retrieve"),
+    call_id: uuid.UUID = Path(..., description="The ID of the call to retrieve"),
     current_gym: Gym = Depends(get_current_gym),
     call_service: DefaultCallService = Depends(get_call_service)
 ):
@@ -98,26 +101,26 @@ async def get_call(
             detail=f"An unexpected error occurred: {str(e)}"
         )
 
-@router.post("", response_model=CallResponse)
+@router.post("/")
 async def create_call(
-    call: CallCreate = Body(...),
+    lead_id: uuid.UUID = Body(..., embed=True, description="The ID of the lead to call"),
     current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     call_service: DefaultCallService = Depends(get_call_service)
 ):
     """
-    Schedule a new outbound call or record a manual inbound call.
-    Automatically associates the call with the current user's gym.
+    Schedule a new outbound call to a lead.
+    Automatically associates the call with the current gym and branch.
     """
     try:
-        # Prepare call data with current gym ID
-        call_data = call.dict()
-        call_data["gym_id"] = str(current_gym.id)
+        # Log the incoming call request
+        logger.info(f"Creating call to lead: {lead_id}")
         
-        # Call trigger_call service method
+        # Call trigger_call service method with only lead_id
         return await call_service.trigger_call(
-            lead_id=call_data.get("lead_id"),
-            campaign_id=call_data.get("campaign_id"),
-            lead_data=call_data
+            lead_id=lead_id,
+            # The service will handle creating appropriate call data with the gym and branch
+            # from the current context
         )
     except ValueError as e:
         raise HTTPException(
@@ -132,7 +135,7 @@ async def create_call(
 
 @router.patch("/{call_id}", response_model=CallResponse)
 async def update_call(
-    call_id: str = Path(..., description="The ID of the call to update"),
+    call_id: uuid.UUID = Path(..., description="The ID of the call to update"),
     call_update: CallUpdate = Body(...),
     current_gym: Gym = Depends(get_current_gym),
     call_service: DefaultCallService = Depends(get_call_service)
@@ -170,7 +173,7 @@ async def update_call(
 
 @router.delete("/{call_id}", response_model=dict)
 async def delete_call(
-    call_id: str = Path(..., description="The ID of the call to delete"),
+    call_id: uuid.UUID = Path(..., description="The ID of the call to delete"),
     current_gym: Gym = Depends(get_current_gym),
     call_service: DefaultCallService = Depends(get_call_service)
 ):

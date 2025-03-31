@@ -2,7 +2,8 @@
 Interface for the Retell Integration Service.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+import uuid
 
 class RetellIntegration(ABC):
     """
@@ -23,7 +24,7 @@ class RetellIntegration(ABC):
     async def create_call(
         self, 
         lead_data: Dict[str, Any], 
-        campaign_id: Optional[str] = None,
+        campaign_id: Optional[uuid.UUID] = None,
         max_duration: Optional[int] = None
     ) -> Dict[str, Any]:
         """

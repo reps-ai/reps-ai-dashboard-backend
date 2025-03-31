@@ -68,7 +68,11 @@ class PostgresCallRepository(CallRepository):
             Call data if found, None otherwise
         """
         logger.info(f"Getting call with ID: {call_id}")
-        return await get_call_with_related_data(self.session, call_id)
+        try:
+            return await get_call_with_related_data(self.session, call_id)
+        except Exception as e:
+            logger.error(f"Error getting call by ID {call_id}: {str(e)}")
+            raise
     
     #Works
     async def update_call(self, call_id: str, call_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -617,8 +621,18 @@ class PostgresCallRepository(CallRepository):
             Dictionary containing call data, or None if not found
         """
         logger.info(f"Getting call with external ID: {external_call_id}")
-        # Placeholder implementation
-        return None
+        
+        # Query call by external_call_id
+        call_query = select(CallLog).where(CallLog.external_call_id == external_call_id)
+        call_result = await self.session.execute(call_query)
+        call = call_result.scalar_one_or_none()
+        
+        if not call:
+            logger.warning(f"No call found with external ID {external_call_id}")
+            return None
+            
+        # Return call data as dictionary
+        return call.to_dict()
         
     async def save_call_recording(self, call_id: str, recording_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
