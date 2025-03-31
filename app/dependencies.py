@@ -15,18 +15,17 @@ from backend.services.call.factory import create_call_service
 from backend.services.lead.implementation import DefaultLeadService
 from backend.db.repositories.lead.implementations import PostgresLeadRepository
 
-
-
-# OAuth2 setup
+# OAuth2 setup - will be used by oauth2.py
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
 
-# Mock User model for now
+# User model expanded to include branch_id
 class User(BaseModel):
     id: int
     email: str
     full_name: str
     is_admin: bool = False
-    gym_id: Optional[int] = None
+    gym_id: Optional[uuid.UUID] = None
+    branch_id: Optional[uuid.UUID] = None
 
 # Mock Gym model
 class Gym(BaseModel):
@@ -50,25 +49,39 @@ MOCK_USER_ID = 1
 MOCK_GYM_ID = uuid.UUID("facd154c-9be8-40fb-995f-27ea665d3a8b")  # Valid gym ID
 MOCK_BRANCH_ID = uuid.UUID("8d8808a4-22f8-4af3-aec4-bab5b44b1aa7")  # Valid branch ID
 
+# NOTE: The actual authentication functions are now in app/auth/oauth2.py
+# These functions remain as fallbacks for testing without authentication
+
 async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> User:
     """
     TESTING MODE: Always returns a mock user without authentication.
     """
+    # Import the real authentication at runtime to avoid circular imports
+    from .auth.oauth2 import get_current_user as real_get_current_user
+    
+    # If a token is provided and we're not in testing mode, use the real authentication
+    if token and token != "test":
+        return await real_get_current_user(token)
+        
     # For testing, bypass token validation and return a mock user
     return User(
         id=MOCK_USER_ID,
         email="test@example.com",
         full_name="Test User",
         is_admin=True,
-        gym_id=1  # This will match with the mock gym below
+        gym_id=MOCK_GYM_ID,
+        branch_id=MOCK_BRANCH_ID
     )
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     TESTING MODE: Always returns an admin user.
     """
-    # For testing, ensure user is always an admin
-    current_user.is_admin = True
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to perform this action",
+        )
     return current_user
 
 async def get_current_gym(current_user: User = Depends(get_current_user)) -> Gym:
@@ -79,27 +92,32 @@ async def get_current_gym(current_user: User = Depends(get_current_user)) -> Gym
     """
     # For testing, return a mock gym without verification
     return Gym(
-        id=MOCK_GYM_ID,
+        id=current_user.gym_id or MOCK_GYM_ID,
         name="Test Gym"
     )
 
 async def get_current_branch(
     branch_id: Optional[Union[uuid.UUID, int, str]] = None,
-    current_gym: Gym = Depends(get_current_gym)
+    current_user: User = Depends(get_current_user)
 ) -> Branch:
     """
     TESTING MODE: Always returns a mock branch without verifying ownership.
     """
-    # For testing, return a mock branch without verification
+    # Use branch_id from request parameter or from current user if not specified
+    branch_uuid = None
+    if branch_id:
+        branch_uuid = branch_id if isinstance(branch_id, uuid.UUID) else uuid.UUID(str(branch_id))
+    else:
+        branch_uuid = current_user.branch_id or MOCK_BRANCH_ID
+        
+    # For testing, return a mock branch
     return Branch(
-        id=MOCK_BRANCH_ID if branch_id is None else (
-            branch_id if isinstance(branch_id, uuid.UUID) else uuid.UUID(str(branch_id)) 
-            if isinstance(branch_id, (str, int)) and str(branch_id) else MOCK_BRANCH_ID
-        ),
-        gym_id=current_gym.id,
+        id=branch_uuid,
+        gym_id=current_user.gym_id or MOCK_GYM_ID,
         name="Test Branch"
     )
 
+# Service dependencies remain unchanged
 async def get_call_service(db: AsyncSession = Depends(get_db)) -> DefaultCallService:
     """
     Dependency to get the call service instance with properly initialized repository.

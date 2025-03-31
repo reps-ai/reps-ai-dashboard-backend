@@ -124,24 +124,24 @@ class CallService(ABC):
     @abstractmethod
     async def get_calls_by_date_range(
         self, 
-        gym_id: str, 
+        branch_id: str,  # Changed from gym_id to branch_id
         start_date: datetime, 
         end_date: datetime,
         page: int = 1,
         page_size: int = 50
-    ) -> Dict[str, Any]:  # Changed from List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
-        Get calls for a gym within a date range.
+        Get calls for a branch within a date range.
         
         Args:
-            gym_id: ID of the gym
+            branch_id: ID of the branch to filter by
             start_date: Start date for the range
             end_date: End date for the range
             page: Page number
             page_size: Page size
             
         Returns:
-            Dictionary containing calls and pagination info  # Updated return description
+            List of calls within the date range
         """
         pass
     
@@ -161,7 +161,7 @@ class CallService(ABC):
     @abstractmethod
     async def get_filtered_calls(
         self, 
-        gym_id: str,
+        branch_id: str,  # Changed from gym_id to branch_id
         page: int = 1,
         page_size: int = 50,
         lead_id: Optional[str] = None,
@@ -175,7 +175,7 @@ class CallService(ABC):
         Get filtered calls with all possible combinations of filters.
         
         Args:
-            gym_id: ID of the gym (required for security)
+            branch_id: ID of the branch (required for security)
             page: Page number
             page_size: Page size
             lead_id: Optional ID of the lead to filter by

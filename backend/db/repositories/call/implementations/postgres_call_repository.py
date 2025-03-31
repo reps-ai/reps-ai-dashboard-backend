@@ -207,7 +207,7 @@ class PostgresCallRepository(CallRepository):
     #Optional
     async def get_scheduled_calls(
         self, 
-        gym_id: str, 
+        branch_id: str,  # Changed from gym_id to branch_id 
         start_time: datetime, 
         end_time: datetime
     ) -> List[Dict[str, Any]]:
@@ -215,15 +215,15 @@ class PostgresCallRepository(CallRepository):
         Get scheduled calls for a time period.
         
         Args:
-            gym_id: Gym ID (branch_id)
+            branch_id: Branch ID to filter by 
             start_time: Start of the time period
             end_time: End of the time period
             
         Returns:
             List of scheduled call data
         """
-        logger.info(f"Getting scheduled calls for gym {gym_id} from {start_time} to {end_time}")
-        return await get_scheduled_calls_db(self.session, gym_id, start_time, end_time)
+        logger.info(f"Getting scheduled calls for branch {branch_id} from {start_time} to {end_time}")
+        return await get_scheduled_calls_db(self.session, branch_id, start_time, end_time)
     
     async def get_calls_by_outcome(
         self, 
@@ -306,7 +306,7 @@ class PostgresCallRepository(CallRepository):
 
     async def get_calls_with_filters(
         self,
-        gym_id: str,
+        branch_id: str,  # Changed from gym_id to branch_id
         page: int = 1,
         page_size: int = 50,
         lead_id: Optional[str] = None,
@@ -320,7 +320,7 @@ class PostgresCallRepository(CallRepository):
         Get calls with combined filtering at the database level.
         
         Args:
-            gym_id: ID of the gym (required for security)
+            branch_id: ID of the branch (required for security)
             page: Page number
             page_size: Page size
             lead_id: Optional lead ID to filter by
@@ -335,13 +335,13 @@ class PostgresCallRepository(CallRepository):
         """
         
         
-        logger.info(f"Getting filtered calls with combined criteria: gym_id={gym_id}, "
+        logger.info(f"Getting filtered calls with combined criteria: branch_id={branch_id}, "
                     f"lead_id={lead_id}, campaign_id={campaign_id}, direction={direction}, "
                     f"outcome={outcome}")
         
         return await get_filtered_calls_db(
             self.session,
-            gym_id,
+            branch_id,  # Changed from gym_id to branch_id
             page,
             page_size,
             lead_id=lead_id,

@@ -117,7 +117,7 @@ class CallRepository(ABC):
     @abstractmethod
     async def get_calls_by_date_range(
         self,
-        gym_id: str,
+        branch_id: str,  # Should be branch_id to match implementation
         start_date: datetime,
         end_date: datetime,
         page: int = 1,
@@ -127,7 +127,7 @@ class CallRepository(ABC):
         Get calls within a date range.
         
         Args:
-            gym_id: Unique identifier of the gym
+            branch_id: Unique identifier of the gym
             start_date: Start of the date range
             end_date: End of the date range
             page: Page number
@@ -236,7 +236,7 @@ class CallRepository(ABC):
     @abstractmethod
     async def get_scheduled_calls(
         self,
-        gym_id: str,
+        branch_id: str,  # Changed from gym_id to branch_id
         start_time: datetime,
         end_time: datetime
     ) -> List[Dict[str, Any]]:
@@ -244,7 +244,7 @@ class CallRepository(ABC):
         Get scheduled calls for a time period.
         
         Args:
-            gym_id: Unique identifier of the gym
+            branch_id: Branch ID to filter by
             start_time: Start of the time period
             end_time: End of the time period
             
@@ -278,7 +278,7 @@ class CallRepository(ABC):
     @abstractmethod
     async def get_calls_with_filters(
         self,
-        gym_id: str,
+        branch_id: str,  # Changed from gym_id to branch_id
         page: int = 1,
         page_size: int = 50,
         lead_id: Optional[str] = None,
@@ -292,7 +292,7 @@ class CallRepository(ABC):
         Get calls with combined filtering at the database level.
         
         Args:
-            gym_id: ID of the gym (required for security)
+            branch_id: ID of the branch (required for security)
             page: Page number
             page_size: Page size
             lead_id: Optional lead ID to filter by

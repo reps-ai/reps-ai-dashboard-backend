@@ -244,7 +244,7 @@ async def get_calls_by_lead_db(
 #Works
 async def get_calls_by_date_range_db(
     session: AsyncSession,
-    branch_id: str,
+    branch_id: str,  # This is correctly named as branch_id
     start_date: datetime,
     end_date: datetime,
     page: int = 1,
@@ -256,7 +256,7 @@ async def get_calls_by_date_range_db(
     
     Args:
         session: Database session
-        gym_id: Gym ID (branch_id)
+        branch_id: Branch ID to filter by
         start_date: Start of the date range
         end_date: End of the date range
         page: Page number
@@ -266,7 +266,7 @@ async def get_calls_by_date_range_db(
     Returns:
         Dictionary containing calls and pagination info
     """
-    # First, get branch IDs for the gym
+    # First, get branch IDs for the branch - this is correct
     branch_query = select(Branch.id).where(Branch.id == branch_id)
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
@@ -352,10 +352,10 @@ async def get_calls_by_date_range_db(
         }
     }
 
-#Works
+# Inconsistent filtering - comment still refers to gym_id
 async def get_calls_by_status_db(
     session: AsyncSession,
-    gym_id: str,
+    gym_id: str,  # This is correctly named as gym_id
     call_status: str,
     start_time: datetime,
     end_time: datetime,
@@ -367,7 +367,7 @@ async def get_calls_by_status_db(
     
     Args:
         session: Database session
-        gym_id: Gym ID (branch_id)
+        gym_id: Gym ID to filter by (filters calls by gym_id)
         call_status: Call status to filter by
         start_time: Start of the time period
         end_time: End of the time period
@@ -377,7 +377,7 @@ async def get_calls_by_status_db(
     Returns:
         List of scheduled call data
     """
-    # First, get branch IDs for the gym
+    # First, get branch IDs for the gym - this is correct
     branch_query = select(Branch.id).where(Branch.gym_id == gym_id)#TODO: check if we want calls by gym_id or branch_id
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
@@ -454,7 +454,7 @@ async def get_calls_by_status_db(
 #Works
 async def get_calls_by_outcome_db(
     session: AsyncSession,
-    branch_id: str,
+    branch_id: str,  # This is correctly named as branch_id
     outcome: str,
     page: int = 1,
     page_size: int = 50
@@ -464,7 +464,7 @@ async def get_calls_by_outcome_db(
     
     Args:
         session: Database session
-        gym_id: Gym ID (branch_id)
+        branch_id: Branch ID to filter by
         outcome: Outcome to filter by
         page: Page number
         page_size: Page size
@@ -872,7 +872,7 @@ async def get_follow_up_calls_by_lead_db(
 
 async def get_filtered_calls_db(
     session: AsyncSession,
-    gym_id: str,
+    branch_id: str,  # Changed from gym_id to branch_id
     page: int = 1,
     page_size: int = 50,
     lead_id: Optional[str] = None,
@@ -889,7 +889,7 @@ async def get_filtered_calls_db(
     
     Args:
         session: Database session
-        gym_id: ID of the gym (required for security)
+        branch_id: ID of the branch (required for security)
         page: Page number
         page_size: Page size
         lead_id: Optional ID of the lead to filter by
@@ -904,16 +904,16 @@ async def get_filtered_calls_db(
     Returns:
         Dictionary containing calls and pagination info
     """
-    logger.info(f"Getting filtered calls with combined criteria: gym_id={gym_id}, "
+    logger.info(f"Getting filtered calls with combined criteria: branch_id={branch_id}, "
                 f"lead_id={lead_id}, campaign_id={campaign_id}, direction={direction}, "
                 f"outcome={outcome}, date range={start_date} to {end_date}")
     
     # Build the base query with dynamic conditions
     conditions = []
     
-    # Apply gym_id filter (security)
-    if gym_id:
-        conditions.append(CallLog.gym_id == gym_id)
+    # Apply branch_id filter (security) - Changed from gym_id to branch_id
+    if branch_id:
+        conditions.append(CallLog.branch_id == branch_id)
     
     # Apply lead_id filter if provided
     if lead_id:
@@ -1069,7 +1069,7 @@ async def update_call_transcript_db(
 
 async def get_scheduled_calls_db(
     session: AsyncSession,
-    gym_id: str,
+    branch_id: str,  # Changed from gym_id to branch_id
     start_time: datetime,
     end_time: datetime
 ) -> List[Dict[str, Any]]:
@@ -1078,20 +1078,20 @@ async def get_scheduled_calls_db(
     
     Args:
         session: Database session
-        gym_id: Gym ID
+        branch_id: Branch ID to filter by directly
         start_time: Start of the time period
         end_time: End of the time period
         
     Returns:
         List of scheduled call data
     """
-    logger.info(f"Getting scheduled calls for gym {gym_id} from {start_time} to {end_time}")
+    logger.info(f"Getting scheduled calls for branch {branch_id} from {start_time} to {end_time}")
     
-    # Build query for scheduled calls
+    # Build query for scheduled calls - filtering directly by branch_id
     scheduled_calls_query = (
         select(CallLog)
         .where(and_(
-            CallLog.gym_id == gym_id,
+            CallLog.branch_id == branch_id,  # Changed from gym_id to branch_id
             CallLog.call_status == "scheduled",
             CallLog.start_time >= start_time,
             CallLog.start_time <= end_time
