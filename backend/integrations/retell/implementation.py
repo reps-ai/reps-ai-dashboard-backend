@@ -169,8 +169,6 @@ class RetellImplementation(RetellIntegration):
             print(f"Creating Retell call with parameters: {call_params}")
             
             # Make the API call to create the phone call
-            # Update to use llm_id instead of agent_id in the API call
-                
             response = self.client.call.create_phone_call(**call_params)
             
             # Convert response to dictionary
