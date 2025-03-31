@@ -55,7 +55,7 @@ class RetellImplementation(RetellIntegration):
         """
         try:
             # Extract phone number from lead data
-            to_number = lead_data.get("phone_number")
+            to_number = lead_data.get("phone_number") or lead_data.get("phone")
             if not to_number:
                 raise ValueError("Lead data does not contain a valid phone number")
                 
@@ -72,15 +72,10 @@ class RetellImplementation(RetellIntegration):
             if not from_number:
                 raise ValueError("RETELL_FROM_NUMBER environment variable is required")
             
-            # Get the agent ID from environment variables
-            agent_id = os.getenv("RETELL_AGENT_ID")
-            if not agent_id:
-                raise ValueError("RETELL_AGENT_ID environment variable is required")
-            
             # Prepare call parameters
             call_params = {
                 "from_number": from_number,
-                "to_number": to_number
+                "to_number": to_number,
             }
             
             # Add optional parameters
@@ -111,11 +106,62 @@ class RetellImplementation(RetellIntegration):
             if metadata:
                 call_params["metadata"] = metadata
             
-            # Add dynamic variables for the agent if needed
-            dynamic_vars = {}
-            if lead_data.get("name"):
-                dynamic_vars["customer_name"] = lead_data.get("name")
+            # Create comprehensive client_data object with all non-null lead information
+            client_data = {}
             
+            # List of fields to check and include if not null (db_field, display_field)
+            fields_to_include = [
+                ("first_name", "first_name"),
+                ("last_name", "last_name"),
+                ("notes", "notes"),
+                ("interest", "interest"),
+                ("interest_location", "interest_location"),
+                ("last_conversation_summary", "last_conversation_summary"),
+                ("score", "score"),
+                ("source", "source"),
+                ("fitness_goals", "fitness_goals"),
+                ("budget_range", "budget_range"),
+                ("timeframe", "timeframe"),
+                ("preferred_contact_method", "contact_method"),
+                ("preferred_contact_time", "contact_time"),
+                ("urgency", "urgency_level"),
+                ("qualification_score", "qual_score"),
+                ("qualification_notes", "qual_notes"),
+                ("fitness_level", "fitness_level"),
+                ("previous_gym_experience", "has_gym_experience"),
+                ("specific_health_goals", "specific_health_goals"),
+                ("preferred_training_type", "training_type"),
+                ("availability", "availability"),
+                ("medical_conditions", "medical_conditions")
+            ]
+            
+            # Only add non-null values to client_data
+            for db_field, display_field in fields_to_include:
+                if lead_data.get(db_field) is not None:
+                    # Convert boolean values to strings for better LLM interpretation
+                    if isinstance(lead_data.get(db_field), bool):
+                        client_data[display_field] = "Yes" if lead_data.get(db_field) else "No"
+                    else:
+                        client_data[display_field] = lead_data.get(db_field)
+            
+            # Add dynamic variables for the agent
+            dynamic_vars = {}
+            
+            # Add name if available
+            full_name = ""
+            if lead_data.get("first_name"):
+                full_name += lead_data.get("first_name")
+            if lead_data.get("last_name"):
+                full_name += " " + lead_data.get("last_name") if full_name else lead_data.get("last_name")
+            
+            if full_name:
+                dynamic_vars["customer_name"] = full_name
+            
+            # Add the client_data object if it has any values
+            if client_data:
+                # Convert client_data to a JSON string as required by Retell
+                dynamic_vars["client_data"] = json.dumps(client_data)
+                
             if dynamic_vars:
                 call_params["retell_llm_dynamic_variables"] = dynamic_vars
                 
@@ -124,9 +170,6 @@ class RetellImplementation(RetellIntegration):
             
             # Make the API call to create the phone call
             # Update to use llm_id instead of agent_id in the API call
-            if "agent_id" in call_params:
-                # Replace agent_id with llm_id
-                call_params["llm_id"] = call_params.pop("agent_id")
                 
             response = self.client.call.create_phone_call(**call_params)
             
@@ -260,6 +303,7 @@ class RetellImplementation(RetellIntegration):
                 "message": str(e),
                 "lead_data": lead_data
             }
+
 
     async def get_call_recording(self, call_id: str) -> Dict[str, Any]:
         """

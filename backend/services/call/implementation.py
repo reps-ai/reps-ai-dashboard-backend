@@ -72,21 +72,12 @@ class DefaultCallService(CallService):
             db_call = await self.call_repository.create_call(call_data)
             logger.info(f"Created call record with ID: {db_call.get('id')}")
             
-            # Create minimal lead data needed for Retell
-            minimal_lead_data = {
-                "id": lead_id,
-                "phone_number": lead_data.get("phone", "12345678900"),
-                "name": lead_data.get("name", "Test Customer"),
-                "gym_id": lead_data.get("gym_id", call_data["gym_id"]),
-                "branch_id": lead_data.get("branch_id", call_data["branch_id"])
-            }
-            
             # If Retell integration is available, trigger the call
             if self.retell_integration:
                 try:
-                    # Make the call using Retell
+                    # Make the call using Retell with comprehensive lead data
                     retell_call_result = await self.retell_integration.create_call(
-                        lead_data=minimal_lead_data,
+                        lead_data=lead_data,  # Pass the full lead data object
                         campaign_id=call_data["campaign_id"]
                     )
                     
@@ -348,6 +339,14 @@ class DefaultCallService(CallService):
             # Convert other exceptions to ValueError
             logger.error(f"Error deleting call {call_id}: {str(e)}")
             raise ValueError(f"Error deleting call: {str(e)}")
+
+
+
+
+
+
+
+
 
     """Optional Beyond This point."""
     #Optional
