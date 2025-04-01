@@ -138,6 +138,13 @@ async def get_lead_service(db: AsyncSession = Depends(get_db)) -> DefaultLeadSer
     """
     Dependency to get the lead service instance with properly initialized repository.
     """
-    lead_repository = PostgresLeadRepository(db)
-    return DefaultLeadService(lead_repository)
+    try:
+        lead_repository = PostgresLeadRepository(db)
+        return DefaultLeadService(lead_repository)
+    except Exception as e:
+        logger.error(f"Error creating lead service: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error initializing lead service"
+        )
 
