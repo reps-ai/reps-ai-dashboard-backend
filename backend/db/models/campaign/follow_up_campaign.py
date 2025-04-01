@@ -29,12 +29,14 @@ class FollowUpCampaign(Base):
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     
-    # Relationships
+    # Comment out these relationships:
+    """
     lead = relationship("Lead", back_populates="follow_up_campaigns")
     branch = relationship("Branch", back_populates="follow_up_campaigns")
     gym = relationship("Gym", back_populates="follow_up_campaign")
     follow_up_calls = relationship("FollowUpCall", back_populates="follow_up_campaign")
-    call_logs = relationship("CallLog", back_populates="campaign", cascade="all")  # Changed from "all, delete-orphan" to just "all"
+    call_logs = relationship("CallLog", back_populates="campaign", cascade="all")
+    """
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -61,6 +63,7 @@ from backend.db.models.call.follow_up_call import FollowUpCall
 from backend.db.models.gym.gym import Gym
 from backend.db.models.gym.branch import Branch
 
+# Keep these relationship definitions and remove the ones inside the class
 FollowUpCampaign.call_logs = relationship("CallLog", back_populates="campaign")
 FollowUpCampaign.lead = relationship("Lead", back_populates="follow_up_campaigns")
 FollowUpCampaign.follow_up_calls = relationship("FollowUpCall", back_populates="campaign")

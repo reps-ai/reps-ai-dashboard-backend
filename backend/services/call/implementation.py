@@ -59,11 +59,9 @@ class DefaultCallService(CallService):
                 "start_time": datetime.now()
             }
             
+            # Only set campaign_id if one is explicitly provided
             if campaign_id:
                 call_data["campaign_id"] = campaign_id
-            else:
-                # Use default campaign ID if none provided
-                call_data["campaign_id"] = uuid.UUID("9427e0d4-bede-479c-a07a-2078592c6cd5")
             
             # Log the data we're inserting
             logger.info(f"Creating call with data: {call_data}")
@@ -78,7 +76,7 @@ class DefaultCallService(CallService):
                     # Make the call using Retell with comprehensive lead data
                     retell_call_result = await self.retell_integration.create_call(
                         lead_data=lead_data,  # Pass the full lead data object
-                        campaign_id=call_data["campaign_id"]
+                        campaign_id=call_data.get("campaign_id")  # Pass campaign_id only if it exists
                     )
                     
                     if retell_call_result.get("status") == "error":
@@ -207,17 +205,17 @@ class DefaultCallService(CallService):
     
     async def get_calls_by_date_range(
         self, 
-        gym_id: str, 
+        branch_id: str,  # Renamed from gym_id to branch_id for clarity
         start_date: datetime, 
         end_date: datetime,
         page: int = 1,
         page_size: int = 50
     ) -> List[Dict[str, Any]]:
         """
-        Get calls for a gym within a date range with exception handling.
+        Get calls for a branch within a date range with exception handling.
         
         Args:
-            gym_id: ID of the gym
+            branch_id: ID of the branch to filter by
             start_date: Start date for the range
             end_date: End date for the range
             page: Page number
@@ -229,21 +227,21 @@ class DefaultCallService(CallService):
         Raises:
             ValueError: If an error occurs during retrieval
         """
-        logger.info(f"Getting calls for gym {gym_id} from {start_date} to {end_date}")
+        logger.info(f"Getting calls for branch {branch_id} from {start_date} to {end_date}")
         
         try:
-            # Get calls using repository
+            # Pass branch_id to the repository function
             calls_result = await self.call_repository.get_calls_by_date_range(
-                gym_id, start_date, end_date, page, page_size
+                branch_id, start_date, end_date, page, page_size
             )
             return calls_result.get("calls", [])
         except Exception as e:
-            logger.error(f"Error retrieving calls by date range for gym {gym_id}: {str(e)}")
+            logger.error(f"Error retrieving calls by date range for branch {branch_id}: {str(e)}")
             raise ValueError(f"Error retrieving calls by date range: {str(e)}")
 
     async def get_filtered_calls(
         self, 
-        gym_id: str,
+        branch_id: str,  # Changed from gym_id to branch_id
         page: int = 1,
         page_size: int = 50,
         lead_id: Optional[str] = None,
@@ -257,7 +255,7 @@ class DefaultCallService(CallService):
         Get filtered calls with all possible combinations of filters at the database level.
         
         Args:
-            gym_id: ID of the gym (required for security)
+            branch_id: ID of the branch (required for security)
             page: Page number
             page_size: Page size
             lead_id: Optional ID of the lead to filter by
@@ -273,7 +271,7 @@ class DefaultCallService(CallService):
         Raises:
             ValueError: If an error occurs during retrieval
         """
-        logger.info(f"Getting filtered calls for gym {gym_id} with filters: lead_id={lead_id}, "
+        logger.info(f"Getting filtered calls for branch {branch_id} with filters: lead_id={lead_id}, "
                     f"campaign_id={campaign_id}, direction={direction}, outcome={outcome}")
         
         try:
@@ -283,9 +281,12 @@ class DefaultCallService(CallService):
             if not end_date:
                 end_date = datetime.now()
             
+            # Convert branch_id to UUID if it's a string
+            branch_uuid = branch_id if isinstance(branch_id, uuid.UUID) else uuid.UUID(str(branch_id))
+            
             # Use the repository's combined filtering method that pushes all filters to the database
             return await self.call_repository.get_calls_with_filters(
-                gym_id=gym_id,
+                branch_id=branch_uuid,  # Ensure it's a UUID
                 page=page,
                 page_size=page_size,
                 lead_id=lead_id,

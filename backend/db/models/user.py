@@ -23,9 +23,10 @@ class User(Base):
     
     __tablename__ = "users"
     
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    # Changed from String to UUID type with direct uuid4 function
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     gym_id = Column(UUID(as_uuid=True), ForeignKey("gyms.id"), nullable=False)
-    branch_id = Column(String(36), ForeignKey("branches.id"), nullable=True)
+    branch_id = Column(UUID(as_uuid=True), ForeignKey("branches.id"), nullable=False)
     username = Column(String(100), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, nullable=False)

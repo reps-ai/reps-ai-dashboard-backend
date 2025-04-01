@@ -1,18 +1,122 @@
 import uuid
-from fastapi import APIRouter, Query, Path, Body, Depends, HTTPException
+from fastapi import APIRouter, Query, Path, Body, Depends, HTTPException, status
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from datetime import datetime
 
-from app.schemas.leads.base import LeadCreate, LeadUpdate
+from app.schemas.leads.base import LeadCreate, LeadUpdate, LeadStatusUpdate
 from app.schemas.leads.responses import LeadResponse, LeadDetailResponse, LeadListResponse
 from app.dependencies import get_current_user, get_current_gym, get_current_branch, User, Gym, Branch, get_lead_service
 from backend.services.lead.implementation import DefaultLeadService
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+def format_lead_for_response(lead: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Format lead data to match the expected LeadResponse schema.
+    Ensures consistent data types and field names.
+    """
+    # Handle fields that may have different names or formats
+    # Normalize score to be between 0 and 1
+    score = 0.0
+    if lead.get("score") is not None:
+        try:
+            score_val = float(lead.get("score", 0))
+            # Ensure score is between 0 and 1
+            score = min(max(score_val, 0.0), 1.0)
+        except (TypeError, ValueError):
+            score = 0.0
+    
+    # Ensure source is one of the allowed values
+    valid_sources = ['website', 'referral', 'walk_in', 'phone', 'social', 'other']
+    source = lead.get("source", "other")
+    if source not in valid_sources:
+        source = "other"
+    
+    # Ensure status is one of the allowed values
+    valid_statuses = ['new', 'contacted', 'qualified', 'converted', 'lost']
+    status = lead.get("lead_status", lead.get("status", "new"))
+    if status not in valid_statuses:
+        status = "new"
+    
+    formatted_lead = {
+        "id": str(lead.get("id", "")),
+        "first_name": lead.get("first_name", ""),
+        "last_name": lead.get("last_name", ""),
+        "phone": lead.get("phone", ""),
+        "email": lead.get("email"),
+        "status": status,
+        "source": source,
+        "branch_id": str(lead.get("branch_id", "")),
+        "branch_name": lead.get("branch_name", ""),
+        "notes": lead.get("notes", ""),
+        "interest": lead.get("interest", ""),
+        "interest_location": lead.get("interest_location", ""),
+        "last_conversation_summary": lead.get("last_conversation_summary"),
+        "score": score,
+        "call_count": int(lead.get("call_count", 0)),
+    }
+    
+    # Handle dates - ensure they're all in ISO format
+    for date_field in ["created_at", "updated_at"]:
+        if lead.get(date_field):
+            if isinstance(lead[date_field], str):
+                formatted_lead[date_field] = lead[date_field]
+            else:
+                formatted_lead[date_field] = lead[date_field].isoformat()
+        else:
+            formatted_lead[date_field] = datetime.now().isoformat()
+    
+    # Handle last_called (may be None)
+    if lead.get("last_called"):
+        if isinstance(lead["last_called"], str):
+            formatted_lead["last_called"] = lead["last_called"]
+        else:
+            formatted_lead["last_called"] = lead["last_called"].isoformat()
+    else:
+        formatted_lead["last_called"] = None
+        
+    # Handle appointment_date (may be None or stored as next_appointment_date)
+    appointment_date = lead.get("appointment_date", lead.get("next_appointment_date"))
+    if appointment_date:
+        if isinstance(appointment_date, str):
+            formatted_lead["appointment_date"] = appointment_date
+        else:
+            formatted_lead["appointment_date"] = appointment_date.isoformat()
+    else:
+        formatted_lead["appointment_date"] = None
+    
+    # Format tags
+    tags = []
+    if lead.get("tags"):
+        for tag in lead["tags"]:
+            tags.append({
+                "id": str(tag.get("id", "")),
+                "name": tag.get("name", ""),
+                "color": tag.get("color", "#888888")
+            })
+    formatted_lead["tags"] = tags
+    
+    return formatted_lead
+
+def normalize_lead_status(lead_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Ensure all leads have valid status values according to the schema.
+    """
+    valid_statuses = ['new', 'contacted', 'qualified', 'converted', 'lost']
+    
+    for lead in lead_list:
+        if lead.get("status") not in valid_statuses:
+            # Default to "new" if status is invalid
+            lead["status"] = "new"
+    
+    return lead_list
 
 @router.get("/", response_model=LeadListResponse)
 async def get_leads(
     current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     status: Optional[str] = None,
     branch_id: Optional[uuid.UUID] = None,
     search: Optional[str] = None,
@@ -37,22 +141,44 @@ async def get_leads(
         filters["sort_by"] = sort_by
         filters["sort_order"] = sort_order or "asc"
     
-    result = await lead_service.get_paginated_leads(
-        branch_id=str(current_gym.id),  # Using gym_id as branch_id for example purposes
-        page=page,
-        page_size=limit,
-        filters=filters
-    )
-    
-    return {
-        "data": result.get("leads", []),
-        "pagination": {
-            "total": result.get("pagination", {}).get("total", 0),
-            "page": page,
-            "limit": limit,
-            "pages": result.get("pagination", {}).get("pages", 1)
+    try:
+        result = await lead_service.get_paginated_leads(
+            branch_id=str(current_branch.id),
+            page=page,
+            page_size=limit,
+            filters=filters
+        )
+        
+        # Format each lead to match the expected schema
+        formatted_leads = [format_lead_for_response(lead) for lead in result.get("leads", [])]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
+        # Ensure pages is at least 1 to satisfy validation
+        pages = result.get("pagination", {}).get("pages", 1)
+        if pages < 1:
+            pages = 1
+        
+        return {
+            "data": formatted_leads,
+            "pagination": {
+                "total": result.get("pagination", {}).get("total", 0),
+                "page": page,
+                "limit": limit,
+                "pages": pages
+            }
         }
-    }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 @router.get("/branch/{branch_id}", response_model=LeadListResponse)
 async def get_leads_by_branch(
@@ -78,22 +204,44 @@ async def get_leads_by_branch(
         filters["sort_by"] = sort_by
         filters["sort_order"] = sort_order or "asc"
     
-    result = await lead_service.get_paginated_leads(
-        branch_id=uuid.UUID(branch.id),
-        page=page,
-        page_size=limit,
-        filters=filters
-    )
-    
-    return {
-        "data": result.get("leads", []),
-        "pagination": {
-            "total": result.get("pagination", {}).get("total", 0),
-            "page": page,
-            "limit": limit,
-            "pages": result.get("pagination", {}).get("pages", 1)
+    try:
+        result = await lead_service.get_paginated_leads(
+            branch_id=str(branch.id),
+            page=page,
+            page_size=limit,
+            filters=filters
+        )
+        
+        # Format each lead to match the expected schema
+        formatted_leads = [format_lead_for_response(lead) for lead in result.get("leads", [])]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
+        # Ensure pages is at least 1 to satisfy validation
+        pages = result.get("pagination", {}).get("pages", 1)
+        if pages < 1:
+            pages = 1
+        
+        return {
+            "data": formatted_leads,
+            "pagination": {
+                "total": result.get("pagination", {}).get("total", 0),
+                "page": page,
+                "limit": limit,
+                "pages": pages
+            }
         }
-    }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 @router.get("/{id}", response_model=LeadDetailResponse)
 async def get_lead(
@@ -106,21 +254,42 @@ async def get_lead(
     Only returns the lead if it belongs to the current user's gym.
     """
     try:
-        lead = await lead_service.get_lead(id)
+        logger.info(f"Fetching lead with ID: {id}")
+        lead = await lead_service.get_lead(str(id))
         
-        # TESTING MODE: Skip gym verification
-        # # Verify lead belongs to user's gym
-        # if str(lead.get("gym_id")) != str(current_gym.id):
-        #     raise HTTPException(
-        #         status_code=404,
-        #         detail="Lead not found"
-        #     )
+        # Verify lead belongs to user's gym
+        if str(lead.get("gym_id")) != str(current_gym.id):
+            logger.warning(f"Lead {id} does not belong to gym {current_gym.id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
         
-        return lead
+        # Format lead to match the expected schema
+        try:
+            logger.debug(f"Formatting lead data for ID: {id}")
+            formatted_lead = format_lead_for_response(lead)
+            return formatted_lead
+        except Exception as format_error:
+            logger.error(f"Error formatting lead data: {str(format_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error formatting lead data: {str(format_error)}"
+            )
     except ValueError as e:
+        logger.error(f"Value error retrieving lead {id}: {str(e)}")
         raise HTTPException(
-            status_code=404,
-            detail=str(e)
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Lead not found: {str(e)}"
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions without modification
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving lead {id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while retrieving the lead"
         )
 
 @router.post("/", response_model=LeadResponse)
@@ -137,13 +306,43 @@ async def create_lead(
     lead_data = lead.dict()
     lead_data["gym_id"] = str(current_gym.id)
     
+    # Map "status" field to "lead_status" field expected by the database model
+    if "status" in lead_data:
+        lead_data["lead_status"] = lead_data.pop("status")
+    
+    # Convert branch_id UUID to string to avoid SQLAlchemy UUID errors
+    if "branch_id" in lead_data and lead_data["branch_id"] is not None:
+        lead_data["branch_id"] = str(lead_data["branch_id"])
+    
+    # Extract tags for later processing
+    tags = None
+    if "tags" in lead_data and lead_data["tags"]:
+        tags = [str(tag) for tag in lead_data["tags"]]
+        # Remove tags from lead_data as they're processed separately
+        lead_data.pop("tags")
+    
     try:
+        # Create the lead without tags first
         created_lead = await lead_service.create_lead(lead_data)
-        return created_lead
+        
+        # If we have tags, add them to the lead in a separate operation
+        if tags and len(tags) > 0:
+            lead_id = created_lead["id"]
+            created_lead = await lead_service.add_tags_to_lead(str(lead_id), tags)
+        
+        # Format created lead to match the expected schema
+        formatted_lead = format_lead_for_response(created_lead)
+        return formatted_lead
     except ValueError as e:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error creating lead: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
         )
 
 @router.put("/{id}", response_model=LeadResponse)
@@ -159,23 +358,30 @@ async def update_lead(
     """
     try:
         # First check if lead exists and belongs to this gym
-        existing_lead = await lead_service.get_lead(id)
+        existing_lead = await lead_service.get_lead(str(id))
         
-        # TESTING MODE: Skip gym verification
-        # if str(existing_lead.get("gym_id")) != str(current_gym.id):
-        #     raise HTTPException(
-        #         status_code=404,
-        #         detail="Lead not found"
-        #     )
+        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
         
         # Update the lead
         lead_data = lead.dict(exclude_unset=True)
-        updated_lead = await lead_service.update_lead(id, lead_data)
-        return updated_lead
+        updated_lead = await lead_service.update_lead(str(id), lead_data)
+        
+        # Format updated lead to match the expected schema
+        formatted_lead = format_lead_for_response(updated_lead)
+        return formatted_lead
     except ValueError as e:
         raise HTTPException(
-            status_code=404 if "not found" in str(e).lower() else 400,
+            status_code=status.HTTP_404_NOT_FOUND if "not found" in str(e).lower() else status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
         )
 
 @router.get("/status/{status}", response_model=LeadListResponse)
@@ -187,11 +393,40 @@ async def get_leads_by_status(
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """Get leads by status."""
-    leads = await lead_service.get_leads_by_status(str(current_gym.id), status)
-    total = len(leads)
-    pages = max(1, (total + limit - 1) // limit)
-    start_idx, end_idx = (page - 1) * limit, min(page * limit, total)
-    return {"data": leads[start_idx:end_idx], "pagination": {"total": total, "page": page, "limit": limit, "pages": pages}}
+    try:
+        leads = await lead_service.get_leads_by_status(str(current_gym.id), status)
+        total = len(leads)
+        
+        # Ensure pages is at least 1 to satisfy validation
+        pages = max(1, (total + limit - 1) // limit)
+        
+        start_idx, end_idx = (page - 1) * limit, min(page * limit, total)
+        
+        # Format leads to match the expected schema
+        formatted_leads = [format_lead_for_response(lead) for lead in leads[start_idx:end_idx]]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
+        return {
+            "data": formatted_leads, 
+            "pagination": {
+                "total": total, 
+                "page": page, 
+                "limit": limit, 
+                "pages": pages
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 @router.get("/prioritized", response_model=List[LeadResponse])
 async def get_prioritized_leads(
@@ -202,32 +437,238 @@ async def get_prioritized_leads(
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """Get prioritized leads for outreach."""
-    exclude_list = exclude_leads.split(",") if exclude_leads else None
-    return await lead_service.get_prioritized_leads(str(current_gym.id), count, qualification, exclude_list)
+    try:
+        exclude_list = exclude_leads.split(",") if exclude_leads else None
+        leads = await lead_service.get_prioritized_leads(str(current_gym.id), count, qualification, exclude_list)
+        
+        # Format leads to match the expected schema
+        formatted_leads = [format_lead_for_response(lead) for lead in leads]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
+        return formatted_leads
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 @router.post("/{id}/qualify", response_model=LeadResponse)
 async def qualify_lead(
     id: uuid.UUID = Path(..., description="The ID of the lead to qualify"),
     qualification: str = Query(..., description="Qualification status (hot, cold, neutral)"),
+    current_gym: Gym = Depends(get_current_gym),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """Update lead qualification status."""
-    return await lead_service.qualify_lead(id, qualification)
+    try:
+        # Verify lead belongs to user's gym
+        existing_lead = await lead_service.get_lead(str(id))
+        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
+            
+        lead = await lead_service.qualify_lead(str(id), qualification)
+        
+        # Format lead to match the expected schema
+        formatted_lead = format_lead_for_response(lead)
+        return formatted_lead
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 @router.post("/{id}/tags", response_model=LeadResponse)
 async def add_tags_to_lead(
     id: uuid.UUID = Path(..., description="The ID of the lead to add tags to"),
     tags: List[uuid.UUID] = Body(..., description="List of tags to add"),
+    current_gym: Gym = Depends(get_current_gym),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """Add tags to a lead."""
-    return await lead_service.add_tags_to_lead(id, tags)
+    try:
+        # Verify lead belongs to user's gym
+        existing_lead = await lead_service.get_lead(str(id))
+        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
+            
+        lead = await lead_service.add_tags_to_lead(str(id), [str(tag) for tag in tags])
+        
+        # Format lead to match the expected schema
+        formatted_lead = format_lead_for_response(lead)
+        return formatted_lead
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+@router.delete("/{id}/tags", response_model=LeadResponse)
+async def remove_tags_from_lead(
+    id: uuid.UUID = Path(..., description="The ID of the lead to remove tags from"),
+    tags: List[uuid.UUID] = Body(..., description="List of tag IDs to remove"),
+    current_gym: Gym = Depends(get_current_gym),
+    lead_service: DefaultLeadService = Depends(get_lead_service)
+):
+    """
+    Remove tags from a lead.
+    Only removes tags if the lead belongs to the current user's gym.
+    """
+    try:
+        # Verify lead belongs to user's gym
+        existing_lead = await lead_service.get_lead(str(id))
+        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
+            
+        # Convert UUIDs to strings
+        tag_ids = [str(tag) for tag in tags]
+        
+        # Call service method to remove tags
+        lead = await lead_service.remove_tags_from_lead(str(id), tag_ids)
+        
+        # Format lead to match the expected schema
+        formatted_lead = format_lead_for_response(lead)
+        return formatted_lead
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error removing tags from lead: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 
 @router.post("/{id}/after-call", response_model=LeadResponse)
 async def update_lead_after_call(
     id: uuid.UUID = Path(..., description="The ID of the lead to update"),
     call_data: Dict[str, Any] = Body(..., description="Call data for updating the lead"),
+    current_gym: Gym = Depends(get_current_gym),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """Update lead information after a call."""
-    return await lead_service.update_lead_after_call(id, call_data)
+    try:
+        # Verify lead belongs to user's gym
+        existing_lead = await lead_service.get_lead(str(id))
+        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
+            
+        lead = await lead_service.update_lead_after_call(str(id), call_data)
+        
+        # Format lead to match the expected schema
+        formatted_lead = format_lead_for_response(lead)
+        return formatted_lead
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+@router.delete("/{id}", response_model=Dict[str, str])
+async def delete_lead(
+    id: uuid.UUID = Path(..., description="The ID of the lead to delete"),
+    current_gym: Gym = Depends(get_current_gym),
+    lead_service: DefaultLeadService = Depends(get_lead_service)
+):
+    """
+    Delete a lead.
+    Only deletes the lead if it belongs to the current user's gym.
+    """
+    try:
+        # First check if lead exists and belongs to this gym
+        existing_lead = await lead_service.get_lead(str(id))
+        
+        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
+        
+        # Delete the lead
+        await lead_service.delete_lead(str(id))
+        
+        return {"message": "Lead successfully deleted"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND if "not found" in str(e).lower() else status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+@router.post("/{id}/status", response_model=LeadResponse)
+async def update_lead_status(
+    id: uuid.UUID = Path(..., description="The ID of the lead to update"),
+    status_update: LeadStatusUpdate = Body(...),
+    current_gym: Gym = Depends(get_current_gym),
+    lead_service: DefaultLeadService = Depends(get_lead_service)
+):
+    """
+    Update the status of a lead.
+    Only updates the lead if it belongs to the current user's gym.
+    """
+    try:
+        # Verify lead belongs to user's gym
+        existing_lead = await lead_service.get_lead(str(id))
+        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lead not found or does not belong to your gym"
+            )
+            
+        # Update only the status field
+        update_data = {"status": status_update.status}
+        updated_lead = await lead_service.update_lead(str(id), update_data)
+        
+        # Format lead to match the expected schema
+        formatted_lead = format_lead_for_response(updated_lead)
+        return formatted_lead
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error updating lead status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )

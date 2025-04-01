@@ -47,3 +47,4 @@ typing_extensions==4.12.2
 tzdata==2025.2
 uvicorn==0.21.1
 yarl==1.18.3
+bcrypt==4.0.1

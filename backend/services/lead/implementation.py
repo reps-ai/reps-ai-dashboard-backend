@@ -25,6 +25,34 @@ class DefaultLeadService(LeadService):
         """
         self.lead_repository = lead_repository
     
+    async def create_lead(self, lead_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new lead.
+        
+        Args:
+            lead_data: Dictionary containing lead information
+            
+        Returns:
+            Dictionary containing the created lead details
+        """
+        # Set created_at and updated_at timestamps if not provided
+        if "created_at" not in lead_data:
+            lead_data["created_at"] = datetime.now()
+        if "updated_at" not in lead_data:
+            lead_data["updated_at"] = datetime.now()
+        
+        # Create lead
+        lead = await self.lead_repository.create_lead(lead_data)
+        
+        # Process tags if provided
+        if tags := lead_data.get("tags"):
+            await self.lead_repository.add_tags_to_lead(str(lead["id"]), tags)
+            # Fetch updated lead with tags
+            lead = await self.lead_repository.get_lead_by_id(str(lead["id"]))
+        
+        logger.info(f"Created new lead: {lead.get('id')}")
+        return lead
+    
     #correct parameters
     async def get_lead(self, lead_id: str) -> Dict[str, Any]:
         """
@@ -289,4 +317,4 @@ class DefaultLeadService(LeadService):
             f"Retrieved {len(leads)} leads for branch: {branch_id}, "
             f"page: {page}, total: {pagination.get('total', 0)}"
         )
-        return result 
+        return result

@@ -20,7 +20,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").replace('+asyncpg', '')
 
 # Initialize faker
 fake = Faker()
-
+    
 # Constants for mock data generation
 LEAD_STATUS_OPTIONS = ["new", "contacted", "qualified", "converted", "closed"]
 LEAD_SOURCES = ["website", "referral", "walk-in", "social media", "online ad", "event"]
@@ -168,15 +168,20 @@ def create_users(conn, gym_ids, branch_ids):
     
     # Create admin users for each gym
     for gym_id in gym_ids:
-        user_id = str(uuid.uuid4())
-        user_ids.append(user_id)
+        user_id = uuid.uuid4()  # Generate UUID object directly
+        user_ids.append(str(user_id))
         first_name = fake.first_name()
         last_name = fake.last_name()
         
+        # Select a random branch_id for this gym to satisfy non-nullable constraint
+        branch_query = f"SELECT id FROM branches WHERE gym_id = '{gym_id}' LIMIT 1"
+        branch_result = conn.execute(text(branch_query)).fetchone()
+        branch_id = branch_result[0] if branch_result else branch_ids[0]  # Fallback to first branch if none found
+        
         conn.execute(text(f"""
-        INSERT INTO users (id, gym_id, username, password_hash, email, first_name, last_name, role, is_active)
+        INSERT INTO users (id, gym_id, branch_id, username, password_hash, email, first_name, last_name, role, is_active)
         VALUES 
-        ('{user_id}', '{gym_id}', '{first_name.lower()}.{last_name.lower()}', 
+        ('{user_id}', '{gym_id}', '{branch_id}', '{first_name.lower()}.{last_name.lower()}', 
         '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW', '{fake.email()}',
         '{first_name}', '{last_name}', 'admin', true)
         """))
@@ -184,18 +189,14 @@ def create_users(conn, gym_ids, branch_ids):
     # Create branch-specific users
     for branch_id in branch_ids:
         # Get the gym_id for this branch
-        gym_id = None
-        for g_id in gym_ids:
-            result = conn.execute(text(f"SELECT gym_id FROM branches WHERE id = '{branch_id}'")).fetchone()
-            if result:
-                gym_id = result[0]
-                break
-        
-        if gym_id:
+        result = conn.execute(text(f"SELECT gym_id FROM branches WHERE id = '{branch_id}'")).fetchone()
+        if result:
+            gym_id = result[0]
+            
             # Create 3-5 users per branch with different roles
             for i in range(random.randint(3, 5)):
-                user_id = str(uuid.uuid4())
-                user_ids.append(user_id)
+                user_id = uuid.uuid4()  # Generate UUID object directly
+                user_ids.append(str(user_id))
                 first_name = fake.first_name()
                 last_name = fake.last_name()
                 role = random.choice(USER_ROLES)

@@ -1,8 +1,8 @@
 from fastapi import APIRouter
-from app.routes.auth import login, user
+from .login import router as login_router
+from .users import router as users_router
 
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/auth")
 
-# Include subrouters
-router.include_router(login.router)
-router.include_router(user.router) 
+router.include_router(login_router)
+router.include_router(users_router, prefix="/users")
