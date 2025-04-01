@@ -62,9 +62,6 @@ class DefaultCallService(CallService):
             # Only set campaign_id if one is explicitly provided
             if campaign_id:
                 call_data["campaign_id"] = campaign_id
-            else:
-                # Use default campaign ID if none provided
-                call_data["campaign_id"] = uuid.UUID("19100531-fe6b-429c-a786-423fa065f969")
             
             # Log the data we're inserting
             logger.info(f"Creating call with data: {call_data}")
@@ -79,7 +76,7 @@ class DefaultCallService(CallService):
                     # Make the call using Retell with comprehensive lead data
                     retell_call_result = await self.retell_integration.create_call(
                         lead_data=lead_data,  # Pass the full lead data object
-                        campaign_id=call_data["campaign_id"]
+                        campaign_id=call_data.get("campaign_id")  # Pass campaign_id only if it exists
                     )
                     
                     if retell_call_result.get("status") == "error":
