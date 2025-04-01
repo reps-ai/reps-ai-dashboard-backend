@@ -22,10 +22,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False
 class User(BaseModel):
     id: int
     email: str
-    full_name: str
-    is_admin: bool = False
+    first_name: str  # Changed from full_name
+    last_name: str   # Added for completeness
+    role: str        # Added role instead of is_admin
+    is_admin: bool = False  # Computed property - kept for compatibility
     gym_id: Optional[uuid.UUID] = None
     branch_id: Optional[uuid.UUID] = None
+
+    @property
+    def full_name(self) -> str:  # Add property for backward compatibility
+        return f"{self.first_name} {self.last_name}"
 
 # Mock Gym model
 class Gym(BaseModel):
@@ -67,8 +73,10 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Use
     return User(
         id=MOCK_USER_ID,
         email="test@example.com",
-        full_name="Test User",
-        is_admin=True,
+        first_name="Test",  # Changed from full_name
+        last_name="User",   # Added last_name
+        role="admin",       # Added role
+        is_admin=True,      # Keep is_admin for compatibility
         gym_id=MOCK_GYM_ID,
         branch_id=MOCK_BRANCH_ID
     )

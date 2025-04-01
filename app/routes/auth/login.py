@@ -58,15 +58,8 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Verify password - in production, you'd check the hashed password
-    # This is a simplified example, in real app use proper password verification:
-    # is_valid = pwd_context.verify(form_data.password, user.password)
-    
-    # CRITICAL SECURITY ISSUE: Plain text password comparison
-    # is_valid = form_data.password == user.password
-    
-    # Should be replaced with proper hashing:
-    is_valid = pwd_context.verify(form_data.password, user.password)
+    # Verify password - using the correct field name: password_hash instead of password
+    is_valid = pwd_context.verify(form_data.password, user.password_hash)
     
     if not is_valid:
         logger.warning(f"Failed login: Incorrect password for {form_data.username}")
@@ -77,12 +70,14 @@ async def login(
         )
     
     # Create token data with user, branch, and gym IDs
+    # Determine admin status based on role field (for return data only)
+    is_admin = user.role in ["admin", "manager"]
+    
     token_data = {
-        "user_id": user.id,
+        "user_id": str(user.id),  # Explicitly convert UUID to string
         "branch_id": str(user.branch_id) if user.branch_id else None,
         "gym_id": str(user.gym_id) if user.gym_id else None,
         "sub": user.email,  # subject claim
-        "is_admin": user.is_admin
     }
     
     # Create access token
@@ -95,7 +90,7 @@ async def login(
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.email,
-        "is_admin": user.is_admin,
+        "is_admin": is_admin,  # Keep is_admin in response
         "branch_id": str(user.branch_id) if user.branch_id else None,
         "gym_id": str(user.gym_id) if user.gym_id else None
     }
@@ -139,11 +134,10 @@ async def refresh_token(current_user: User = Depends(get_current_user)):
     
     # Create new token data
     token_data = {
-        "user_id": current_user.id,
+        "user_id": str(current_user.id),  # Explicitly convert UUID to string
         "branch_id": str(current_user.branch_id) if current_user.branch_id else None,
         "gym_id": str(current_user.gym_id) if current_user.gym_id else None,
-        "sub": current_user.email,
-        "is_admin": current_user.is_admin
+        "sub": current_user.email
     }
     
     # Create new access token

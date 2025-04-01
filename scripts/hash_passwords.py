@@ -39,16 +39,16 @@ try:
     for user in users:
         print(f"Processing user: {user.email}")
         # Skip users that might already have hashed passwords
-        if len(user.password) > 50:  # Most likely already hashed
+        if len(user.password_hash) > 50:  # Use correct field name: password_hash
             print(f"  User {user.email} already has a hashed password")
             continue
             
         # Hash the password
-        hashed_password = pwd_context.hash(user.password)
+        hashed_password = pwd_context.hash(user.password_hash)  # Use correct field name
         
         # Update the user
         session.execute(
-            update(User).where(User.id == user.id).values(password=hashed_password)
+            update(User).where(User.id == user.id).values(password_hash=hashed_password)  # Use correct field name
         )
         updated_count += 1
     

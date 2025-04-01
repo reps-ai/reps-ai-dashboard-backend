@@ -84,8 +84,14 @@ async def verify_access_token(token: str, credentials_exception: HTTPException) 
         gym_id = payload.get("gym_id")
         
         # Convert IDs to proper types
+        if user_id:
+            try:
+                user_id = int(user_id) if user_id.isdigit() else uuid.UUID(user_id)
+            except (ValueError, AttributeError):
+                raise credentials_exception
+                
         if branch_id:
-            branch_id = uuid.UUID(branch_id)
+            branch_id = uuid.UUID(branch_id)  # Converting branch_id back to UUID
         if gym_id:
             gym_id = uuid.UUID(gym_id)
         
@@ -131,12 +137,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
     if db_user is None:
         raise credentials_exception
     
-    # Create a user object with proper branch_id assignment
+    # Determine admin status based on role
+    is_admin = db_user.role in ["admin", "manager"]
+    
+    # Create a user object with proper field assignments
     user = User(
         id=db_user.id,
         email=db_user.email,
-        full_name=db_user.full_name,
-        is_admin=db_user.is_admin,
+        first_name=db_user.first_name,  
+        last_name=db_user.last_name,    
+        role=db_user.role,              
+        is_admin=is_admin,              # Derived from role
         gym_id=db_user.gym_id
     )
     

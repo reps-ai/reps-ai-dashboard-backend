@@ -283,9 +283,12 @@ class DefaultCallService(CallService):
             if not end_date:
                 end_date = datetime.now()
             
+            # Convert branch_id to UUID if it's a string
+            branch_uuid = branch_id if isinstance(branch_id, uuid.UUID) else uuid.UUID(str(branch_id))
+            
             # Use the repository's combined filtering method that pushes all filters to the database
             return await self.call_repository.get_calls_with_filters(
-                branch_id=branch_id,  # Changed from gym_id to branch_id
+                branch_id=branch_uuid,  # Ensure it's a UUID
                 page=page,
                 page_size=page_size,
                 lead_id=lead_id,

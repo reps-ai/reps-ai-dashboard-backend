@@ -267,7 +267,9 @@ async def get_calls_by_date_range_db(
         Dictionary containing calls and pagination info
     """
     # First, get branch IDs for the branch - this is correct
-    branch_query = select(Branch.id).where(Branch.id == branch_id)
+    # Convert branch_id to UUID to ensure proper DB type
+    branch_uuid = branch_id if isinstance(branch_id, UUID) else UUID(str(branch_id))
+    branch_query = select(Branch.id).where(Branch.id == branch_uuid)
     branch_result = await session.execute(branch_query)
     branch_ids = [row[0] for row in branch_result]
     
@@ -913,7 +915,9 @@ async def get_filtered_calls_db(
     
     # Apply branch_id filter (security) - Changed from gym_id to branch_id
     if branch_id:
-        conditions.append(CallLog.branch_id == branch_id)
+        # Convert branch_id to UUID to ensure proper DB type
+        branch_uuid = branch_id if isinstance(branch_id, UUID) else UUID(str(branch_id))
+        conditions.append(CallLog.branch_id == branch_uuid)
     
     # Apply lead_id filter if provided
     if lead_id:

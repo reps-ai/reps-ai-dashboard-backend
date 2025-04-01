@@ -12,6 +12,7 @@ from ....models.campaign.follow_up_campaign import FollowUpCampaign
 from ....models.call.follow_up_call import FollowUpCall
 from ....models.user import User
 from ....models.gym.branch import Branch
+import uuid
 from ....helpers.call.call_queries import (
     get_call_with_related_data,
     get_calls_by_campaign_db,
@@ -199,8 +200,12 @@ class PostgresCallRepository(CallRepository):
             Dictionary containing calls and pagination info
         """
         logger.info(f"Getting calls for branch {branch_id} from {start_date} to {end_date}")
+        
+        # Ensure branch_id is a UUID
+        branch_uuid = branch_id if isinstance(branch_id, uuid.UUID) else uuid.UUID(str(branch_id))
+        
         return await get_calls_by_date_range_db(
-            self.session, branch_id, start_date, end_date, page, page_size
+            self.session, branch_uuid, start_date, end_date, page, page_size
         )
     
 
@@ -334,14 +339,16 @@ class PostgresCallRepository(CallRepository):
             Dictionary containing calls and pagination info
         """
         
+        # Ensure branch_id is a UUID
+        branch_uuid = branch_id if isinstance(branch_id, uuid.UUID) else uuid.UUID(str(branch_id))
         
-        logger.info(f"Getting filtered calls with combined criteria: branch_id={branch_id}, "
+        logger.info(f"Getting filtered calls with combined criteria: branch_id={branch_uuid}, "
                     f"lead_id={lead_id}, campaign_id={campaign_id}, direction={direction}, "
                     f"outcome={outcome}")
         
         return await get_filtered_calls_db(
             self.session,
-            branch_id,  # Changed from gym_id to branch_id
+            branch_uuid,  # Now guaranteed to be a UUID
             page,
             page_size,
             lead_id=lead_id,
