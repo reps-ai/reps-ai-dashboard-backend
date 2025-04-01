@@ -68,13 +68,8 @@ async def get_calls(
             end_date=end_datetime
         )
         
-        # Check if any calls were found and return 404 if none match the criteria
-        if not result.get("calls"):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No calls found matching the specified criteria"
-            )
-            
+        # Remove the empty result check and just return the result
+        # Empty arrays are valid API responses
         return result
     except ValueError as e:
         raise HTTPException(
@@ -108,25 +103,42 @@ async def get_call(
             )
         
         # The service layer handles exceptions
-        call = await call_service.get_call(call_id_uuid)
-        
-        # Security check: verify the call belongs to the current branch
-        if str(call.get("branch_id")) != str(current_branch.id):  # Changed from gym_id to branch_id
+        try:
+            call = await call_service.get_call(call_id_uuid)
+            
+            # If we got here but call is None, handle as not found
+            if call is None:
+                logger.warning(f"Call not found with ID: {call_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Call with ID {call_id} not found"
+                )
+                
+            # Security check: verify the call belongs to the current branch
+            if str(call.get("branch_id")) != str(current_branch.id):
+                logger.warning(f"Call {call_id} does not belong to branch {current_branch.id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Call not found or does not belong to your branch"
+                )
+            
+            return call
+        except ValueError as e:
+            logger.error(f"Value error when retrieving call {call_id}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Call not found or does not belong to your branch"
+                detail=str(e) if str(e) else "Call not found"
             )
-        
-        return call
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        # Improved error logging
+        error_msg = str(e) if str(e) else "Unknown database error occurred"
+        logger.exception(f"Error retrieving call {call_id}: {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
+            detail=f"An unexpected error occurred: {error_msg}"
         )
 
 @router.post("/")
@@ -163,7 +175,7 @@ async def create_call(
 async def update_call(
     call_id: str = Path(..., description="The ID of the call to update"),
     call_update: CallUpdate = Body(...),
-    current_branch: Branch = Depends(get_current_branch),  # Change to branch dependency
+    current_branch: Branch = Depends(get_current_branch),
     call_service: DefaultCallService = Depends(get_call_service)
 ):
     """
@@ -171,39 +183,78 @@ async def update_call(
     Only updates the call if it belongs to the current user's branch.
     """
     try:
+        # Log the update attempt
+        logger.info(f"Attempting to update call {call_id} with data: {call_update.dict(exclude_unset=True)}")
+        
         # Convert string to UUID (this will raise ValueError if invalid)
         try:
             call_id_uuid = uuid.UUID(call_id)
         except ValueError:
+            logger.warning(f"Invalid call ID format: {call_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid call ID format. Must be a valid UUID."
             )
             
         # First get the call to verify ownership
-        call = await call_service.get_call(call_id_uuid)
-        
-        # Verify the call belongs to the current branch
-        if str(call.get("branch_id")) != str(current_branch.id):  # Changed from gym_id to branch_id
+        try:
+            call = await call_service.get_call(call_id_uuid)
+            
+            # If call is None, handle as not found
+            if call is None:
+                logger.warning(f"Call not found with ID: {call_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Call with ID {call_id} not found"
+                )
+            
+            # Verify the call belongs to the current branch
+            if str(call.get("branch_id")) != str(current_branch.id):
+                logger.warning(f"Call {call_id} does not belong to branch {current_branch.id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Call not found or does not belong to your branch"
+                )
+            
+            # Update call using the service
+            try:
+                call_data = call_update.dict(exclude_unset=True)
+                logger.debug(f"Updating call {call_id} with data: {call_data}")
+                updated_call = await call_service.update_call(
+                    call_id=call_id_uuid,
+                    call_data=call_data
+                )
+                logger.info(f"Successfully updated call {call_id}")
+                return updated_call
+            except ValueError as e:
+                error_msg = str(e) if str(e) else "Invalid update data provided"
+                logger.error(f"Value error updating call {call_id}: {error_msg}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_msg
+                )
+            except Exception as e:
+                error_msg = str(e) if str(e) else "Unknown error during update"
+                logger.exception(f"Error updating call {call_id}: {error_msg}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to update call: {error_msg}"
+                )
+        except ValueError as e:
+            logger.error(f"Value error when retrieving call {call_id}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Call not found or does not belong to your branch"
+                detail=str(e) if str(e) else "Call not found"
             )
-        
-        # Update call using the service
-        return await call_service.update_call(
-            call_id=call_id_uuid,
-            call_data=call_update.dict(exclude_unset=True)
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        error_msg = str(e) if str(e) else "Unknown server error"
+        logger.exception(f"Unexpected error in update_call endpoint for {call_id}: {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
+            detail=f"An unexpected error occurred: {error_msg}"
         )
 
 @router.delete("/{call_id}", response_model=dict)
@@ -217,34 +268,72 @@ async def delete_call(
     Only deletes the call if it belongs to the current user's branch.
     """
     try:
+        # Log deletion attempt
+        logger.info(f"Attempting to delete call with ID: {call_id}")
+        
         # Convert string to UUID (this will raise ValueError if invalid)
         try:
             call_id_uuid = uuid.UUID(call_id)
         except ValueError:
+            logger.warning(f"Invalid call ID format for deletion: {call_id}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid call ID format. Must be a valid UUID."
             )
             
         # First get the call to verify ownership
-        call = await call_service.get_call(call_id_uuid)
-        
-        # Verify the call belongs to the current branch
-        if str(call.get("branch_id")) != str(current_branch.id):  # Changed from gym_id to branch_id
+        try:
+            call = await call_service.get_call(call_id_uuid)
+            
+            # If call is None, handle as not found
+            if call is None:
+                logger.warning(f"Call not found for deletion with ID: {call_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Call with ID {call_id} not found"
+                )
+            
+            # Verify the call belongs to the current branch
+            if str(call.get("branch_id")) != str(current_branch.id):
+                logger.warning(f"Call {call_id} does not belong to branch {current_branch.id} - deletion denied")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Call not found or does not belong to your branch"
+                )
+            
+            # Delete call using the service
+            try:
+                logger.debug(f"Proceeding with deletion of call {call_id}")
+                result = await call_service.delete_call(call_id_uuid)
+                logger.info(f"Successfully deleted call {call_id}")
+                return result
+            except ValueError as e:
+                error_msg = str(e) if str(e) else "Invalid data for deletion"
+                logger.error(f"Value error deleting call {call_id}: {error_msg}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=error_msg
+                )
+            except Exception as e:
+                error_msg = str(e) if str(e) else "Unknown error during deletion"
+                logger.exception(f"Error deleting call {call_id}: {error_msg}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to delete call: {error_msg}"
+                )
+        except ValueError as e:
+            logger.error(f"Value error when retrieving call {call_id} before deletion: {str(e)}")
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Call not found or does not belong to your branch"
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail=str(e) if str(e) else "Call not found"
             )
-        
-        # Delete call using the service
-        return await call_service.delete_call(call_id_uuid)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        error_msg = str(e) if str(e) else "Unknown server error"
+        logger.exception(f"Unexpected error in delete_call endpoint for {call_id}: {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
+            detail=f"An unexpected error occurred: {error_msg}"
         )

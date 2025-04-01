@@ -1,7 +1,8 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, root_validator
 from app.schemas.common.call_types import CallDirection, CallStatus, CallOutcome, CallSentiment, TranscriptEntry
+import uuid
 
 class LeadSummary(BaseModel):
     id: str = Field(..., description="Unique identifier for the lead")
@@ -10,6 +11,11 @@ class LeadSummary(BaseModel):
     phone: str = Field(..., description="Phone number of the lead")
     email: Optional[str] = Field(None, description="Email address of the lead")
     
+    @validator('id', pre=True)
+    def convert_id_to_str(cls, v):
+        """Convert UUID or other types to string"""
+        return str(v) if v is not None else None
+
     class Config:
         schema_extra = {
             "example": {
@@ -25,8 +31,8 @@ class CallResponse(BaseModel):
     id: str = Field(..., description="Unique identifier for the call")
     lead_id: str = Field(..., description="ID of the lead associated with this call")
     lead: LeadSummary = Field(..., description="Summary information about the lead")
-    direction: str = Field(..., description="Direction of the call (inbound/outbound)")
-    status: str = Field(..., description="Current status of the call")
+    direction: str = Field(default="outbound", description="Direction of the call (inbound/outbound)")  # Default added
+    status: str = Field(default="scheduled", description="Current status of the call")  # Default added
     start_time: Optional[str] = Field(None, description="Start time of the call in ISO format")
     end_time: Optional[str] = Field(None, description="End time of the call in ISO format")
     duration: Optional[int] = Field(None, ge=0, description="Duration of the call in seconds")
@@ -39,47 +45,74 @@ class CallResponse(BaseModel):
     campaign_id: Optional[str] = Field(None, description="ID of the campaign this call is part of")
     campaign_name: Optional[str] = Field(None, description="Name of the campaign")
     
+    # Add validators to handle type conversions
+    @validator('id', 'lead_id', 'campaign_id', pre=True)
+    def convert_ids_to_str(cls, v):
+        """Convert UUID or other types to string"""
+        return str(v) if v is not None else None
+    
+    @validator('start_time', 'end_time', 'created_at', pre=True)
+    def convert_datetime_to_str(cls, v):
+        """Handle datetime conversion to ISO format string"""
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.isoformat()
+        if isinstance(v, str):
+            return v
+        # For any other type, convert to string
+        return str(v)
+    
     @validator('direction')
     def validate_direction(cls, v):
+        if not v:  # Handle None or empty string
+            return "outbound"  # Default value
         try:
             return CallDirection(v).value
         except ValueError:
-            raise ValueError(f'Direction must be one of: {[d.value for d in CallDirection]}')
+            # More permissive - if not a valid enum, just return as is
+            return v
     
     @validator('status')
     def validate_status(cls, v):
+        if not v:  # Handle None or empty string
+            return "scheduled"  # Default value
         try:
             return CallStatus(v).value
         except ValueError:
-            raise ValueError(f'Status must be one of: {[s.value for s in CallStatus]}')
+            # More permissive - if not a valid enum, just return as is
+            return v
     
     @validator('outcome')
     def validate_outcome(cls, v):
-        if v is not None:
-            try:
-                return CallOutcome(v).value
-            except ValueError:
-                raise ValueError(f'Outcome must be one of: {[o.value for o in CallOutcome]}')
-        return v
+        if v is None:
+            return None
+        try:
+            return CallOutcome(v).value
+        except ValueError:
+            # More permissive - if not a valid enum, just return as is
+            return v
     
     @validator('sentiment')
     def validate_sentiment(cls, v):
-        if v is not None:
-            try:
-                return CallSentiment(v).value
-            except ValueError:
-                raise ValueError(f'Sentiment must be one of: {[s.value for s in CallSentiment]}')
-        return v
+        if v is None:
+            return None
+        try:
+            return CallSentiment(v).value
+        except ValueError:
+            # More permissive - if not a valid enum, just return as is
+            return v
     
-    @validator('start_time', 'end_time', 'created_at')
-    def validate_timestamps(cls, v):
-        if v is not None:
-            try:
-                # Parse the datetime to validate format
-                datetime.fromisoformat(v.replace('Z', '+00:00'))
-            except ValueError:
-                raise ValueError('Timestamp must be a valid ISO datetime format')
-        return v
+    # Add a root validator to handle missing fields or inconsistent data
+    @root_validator(pre=True)
+    def ensure_required_fields(cls, values):
+        """Ensure all required fields have values, even if they're not in the input."""
+        # Make sure 'lead' is populated
+        if 'lead' not in values or not values['lead']:
+            if 'lead_id' in values:
+                # Create a minimal lead object based on lead_id
+                values['lead'] = {'id': values['lead_id'], 'first_name': '', 'last_name': '', 'phone': ''}
+        return values
     
     class Config:
         use_enum_values = True
@@ -166,9 +199,46 @@ class CallOutcomeResponse(BaseModel):
 class PaginationInfo(BaseModel):
     total: int = Field(..., ge=0, description="Total number of calls available")
     page: int = Field(..., ge=1, description="Current page number")
-    limit: int = Field(..., ge=1, description="Number of calls per page")
-    pages: int = Field(..., ge=1, description="Total number of pages available")
+    page_size: int = Field(..., ge=1, description="Number of calls per page")
+    pages: int = Field(1, ge=1, description="Total number of pages available")  # Set default to 1
+    
+    @validator('pages', pre=True)
+    def ensure_min_pages(cls, v):
+        """Ensure pages is at least 1 even when there are no results"""
+        if v is None or v < 1:
+            return 1
+        return v
+    
+    # Add a root validator to ensure consistency between total and pages
+    @root_validator(pre=True)
+    def calculate_pages_if_missing(cls, values):
+        """Calculate pages from total and page_size if not provided"""
+        if 'total' in values and 'page_size' in values and values['page_size'] > 0:
+            # Calculate pages but ensure it's at least 1
+            calculated_pages = max(1, (values['total'] + values['page_size'] - 1) // values['page_size'])
+            # Only set if pages is missing or invalid
+            if 'pages' not in values or values['pages'] is None or values['pages'] < 1:
+                values['pages'] = calculated_pages
+        return values
 
 class CallListResponse(BaseModel):
-    data: List[CallResponse] = Field(..., description="List of call data")
+    calls: List[CallResponse] = Field(
+        default_factory=list,  # Default to empty list
+        description="List of call data. May be empty if no calls match the filter criteria."
+    )
     pagination: PaginationInfo = Field(..., description="Pagination information")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "calls": [
+                    # Example call data
+                ],
+                "pagination": {
+                    "total": 0,
+                    "page": 1,
+                    "page_size": 10,
+                    "pages": 1
+                }
+            }
+        }
