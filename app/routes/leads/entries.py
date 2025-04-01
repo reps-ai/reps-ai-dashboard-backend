@@ -116,6 +116,7 @@ def normalize_lead_status(lead_list: List[Dict[str, Any]]) -> List[Dict[str, Any
 @router.get("/", response_model=LeadListResponse)
 async def get_leads(
     current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     status: Optional[str] = None,
     branch_id: Optional[uuid.UUID] = None,
     search: Optional[str] = None,
@@ -142,7 +143,7 @@ async def get_leads(
     
     try:
         result = await lead_service.get_paginated_leads(
-            branch_id=str(current_gym.id),
+            branch_id=str(current_branch.id),
             page=page,
             page_size=limit,
             filters=filters
