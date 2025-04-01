@@ -68,13 +68,8 @@ async def get_calls(
             end_date=end_datetime
         )
         
-        # Check if any calls were found and return 404 if none match the criteria
-        if not result.get("calls"):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No calls found matching the specified criteria"
-            )
-            
+        # Remove the empty result check and just return the result
+        # Empty arrays are valid API responses
         return result
     except ValueError as e:
         raise HTTPException(
