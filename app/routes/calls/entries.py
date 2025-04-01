@@ -147,8 +147,6 @@ async def create_call(
         # Pass all needed context to the service
         return await call_service.trigger_call(
             lead_id=lead_id,
-            branch_id=current_branch.id,  # Fixed: was "idd" previously
-            gym_id=current_gym.id
         )
     except ValueError as e:
         raise HTTPException(

@@ -59,11 +59,12 @@ class DefaultCallService(CallService):
                 "start_time": datetime.now()
             }
             
+            # Only set campaign_id if one is explicitly provided
             if campaign_id:
                 call_data["campaign_id"] = campaign_id
             else:
                 # Use default campaign ID if none provided
-                call_data["campaign_id"] = uuid.UUID("9427e0d4-bede-479c-a07a-2078592c6cd5")
+                call_data["campaign_id"] = uuid.UUID("19100531-fe6b-429c-a786-423fa065f969")
             
             # Log the data we're inserting
             logger.info(f"Creating call with data: {call_data}")

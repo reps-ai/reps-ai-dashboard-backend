@@ -58,7 +58,7 @@ MOCK_BRANCH_ID = uuid.UUID("8d8808a4-22f8-4af3-aec4-bab5b44b1aa7")  # Valid bran
 # NOTE: The actual authentication functions are now in app/auth/oauth2.py
 # These functions remain as fallbacks for testing without authentication
 
-async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> User:
+async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
     """
     TESTING MODE: Always returns a mock user without authentication.
     """
@@ -67,7 +67,8 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Use
     
     # If a token is provided and we're not in testing mode, use the real authentication
     if token and token != "test":
-        return await real_get_current_user(token)
+        # Pass both token and db session to the real function
+        return await real_get_current_user(token=token, session=db)
         
     # For testing, bypass token validation and return a mock user
     return User(
