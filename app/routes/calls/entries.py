@@ -103,25 +103,42 @@ async def get_call(
             )
         
         # The service layer handles exceptions
-        call = await call_service.get_call(call_id_uuid)
-        
-        # Security check: verify the call belongs to the current branch
-        if str(call.get("branch_id")) != str(current_branch.id):  # Changed from gym_id to branch_id
+        try:
+            call = await call_service.get_call(call_id_uuid)
+            
+            # If we got here but call is None, handle as not found
+            if call is None:
+                logger.warning(f"Call not found with ID: {call_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Call with ID {call_id} not found"
+                )
+                
+            # Security check: verify the call belongs to the current branch
+            if str(call.get("branch_id")) != str(current_branch.id):
+                logger.warning(f"Call {call_id} does not belong to branch {current_branch.id}")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Call not found or does not belong to your branch"
+                )
+            
+            return call
+        except ValueError as e:
+            logger.error(f"Value error when retrieving call {call_id}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Call not found or does not belong to your branch"
+                detail=str(e) if str(e) else "Call not found"
             )
-        
-        return call
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
+        # Improved error logging
+        error_msg = str(e) if str(e) else "Unknown database error occurred"
+        logger.exception(f"Error retrieving call {call_id}: {error_msg}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
+            detail=f"An unexpected error occurred: {error_msg}"
         )
 
 @router.post("/")
