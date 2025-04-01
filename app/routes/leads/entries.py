@@ -34,13 +34,19 @@ def format_lead_for_response(lead: Dict[str, Any]) -> Dict[str, Any]:
     if source not in valid_sources:
         source = "other"
     
+    # Ensure status is one of the allowed values
+    valid_statuses = ['new', 'contacted', 'qualified', 'converted', 'lost']
+    status = lead.get("lead_status", lead.get("status", "new"))
+    if status not in valid_statuses:
+        status = "new"
+    
     formatted_lead = {
         "id": str(lead.get("id", "")),
         "first_name": lead.get("first_name", ""),
         "last_name": lead.get("last_name", ""),
         "phone": lead.get("phone", ""),
         "email": lead.get("email"),
-        "status": lead.get("lead_status", lead.get("status", "new")),  # Check both field names
+        "status": status,
         "source": source,
         "branch_id": str(lead.get("branch_id", "")),
         "branch_name": lead.get("branch_name", ""),
@@ -94,6 +100,19 @@ def format_lead_for_response(lead: Dict[str, Any]) -> Dict[str, Any]:
     
     return formatted_lead
 
+def normalize_lead_status(lead_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Ensure all leads have valid status values according to the schema.
+    """
+    valid_statuses = ['new', 'contacted', 'qualified', 'converted', 'lost']
+    
+    for lead in lead_list:
+        if lead.get("status") not in valid_statuses:
+            # Default to "new" if status is invalid
+            lead["status"] = "new"
+    
+    return lead_list
+
 @router.get("/", response_model=LeadListResponse)
 async def get_leads(
     current_gym: Gym = Depends(get_current_gym),
@@ -131,6 +150,9 @@ async def get_leads(
         
         # Format each lead to match the expected schema
         formatted_leads = [format_lead_for_response(lead) for lead in result.get("leads", [])]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
         
         # Ensure pages is at least 1 to satisfy validation
         pages = result.get("pagination", {}).get("pages", 1)
@@ -191,6 +213,9 @@ async def get_leads_by_branch(
         
         # Format each lead to match the expected schema
         formatted_leads = [format_lead_for_response(lead) for lead in result.get("leads", [])]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
         
         # Ensure pages is at least 1 to satisfy validation
         pages = result.get("pagination", {}).get("pages", 1)
@@ -379,6 +404,9 @@ async def get_leads_by_status(
         # Format leads to match the expected schema
         formatted_leads = [format_lead_for_response(lead) for lead in leads[start_idx:end_idx]]
         
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
         return {
             "data": formatted_leads, 
             "pagination": {
@@ -414,6 +442,10 @@ async def get_prioritized_leads(
         
         # Format leads to match the expected schema
         formatted_leads = [format_lead_for_response(lead) for lead in leads]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
         return formatted_leads
     except ValueError as e:
         raise HTTPException(
