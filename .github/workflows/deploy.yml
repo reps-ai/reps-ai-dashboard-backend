@@ -10,14 +10,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.MACMINI_SSH_KEY }}
-
-      - name: Trigger deploy script on Mac mini
+      - name: Add SSH Key
         run: |
-          ssh -o StrictHostKeyChecking=no home@10.0.0.7 "bash ~/scripts/deploy.sh"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MACMINI_SSH_KEY }}" > ~/.ssh/macmini_deploy_key
+          chmod 600 ~/.ssh/macmini_deploy_key
+
+      - name: Connect and deploy
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/macmini_deploy_key home@ssh.rthulabs.com "bash ~/scripts/deploy.sh"
