@@ -87,6 +87,10 @@ class DefaultLeadService(LeadService):
         # Set updated_at timestamp
         lead_data["updated_at"] = datetime.now()
         
+        # Map "status" field to "lead_status" field expected by the database model
+        if "status" in lead_data:
+            lead_data["lead_status"] = lead_data.pop("status")
+        
         # Update lead
         lead = await self.lead_repository.update_lead(lead_id, lead_data)
         
@@ -278,10 +282,82 @@ class DefaultLeadService(LeadService):
         Returns:
             List of leads with the specified status
         """
+        # Map status to lead_status for database compatibility
         leads = await self.lead_repository.get_leads_by_status(gym_id, status)
         
         logger.info(f"Retrieved {len(leads)} leads with status '{status}' for gym: {gym_id}")
         return leads
+    
+    async def delete_lead(self, lead_id: str) -> None:
+        """
+        Delete a lead by ID.
+        
+        Args:
+            lead_id: ID of the lead to delete
+            
+        Returns:
+            None
+        
+        Raises:
+            ValueError: If lead not found
+        """
+        # Check if lead exists
+        lead = await self.lead_repository.get_lead_by_id(lead_id)
+        if not lead:
+            raise ValueError(f"Lead not found: {lead_id}")
+        
+        # First, let's delete any related records to avoid foreign key constraint violations
+        from sqlalchemy import delete, text
+        from backend.db.connections.database import get_db_session
+        
+        try:
+            # Get a session directly rather than using the context manager
+            session = await get_db_session()
+            
+            try:
+                # 1. Delete related members (must be first since it references the lead)
+                delete_members_stmt = text("DELETE FROM members WHERE lead_id = :lead_id")
+                await session.execute(delete_members_stmt, {"lead_id": lead_id})
+                await session.commit()
+                logger.info(f"Deleted members for lead: {lead_id}")
+                
+                # 2. Delete related appointments
+                delete_appointments_stmt = text("DELETE FROM appointments WHERE lead_id = :lead_id")
+                await session.execute(delete_appointments_stmt, {"lead_id": lead_id})
+                await session.commit()
+                logger.info(f"Deleted appointments for lead: {lead_id}")
+                
+                # 3. Delete related call logs
+                delete_call_logs_stmt = text("DELETE FROM call_logs WHERE lead_id = :lead_id")
+                await session.execute(delete_call_logs_stmt, {"lead_id": lead_id})
+                await session.commit()
+                logger.info(f"Deleted call logs for lead: {lead_id}")
+                
+                # 4. Delete related follow-up calls
+                delete_follow_up_calls_stmt = text("DELETE FROM follow_up_calls WHERE lead_id = :lead_id")
+                await session.execute(delete_follow_up_calls_stmt, {"lead_id": lead_id})
+                await session.commit()
+                logger.info(f"Deleted follow-up calls for lead: {lead_id}")
+                
+                # 5. Delete related lead tags
+                delete_lead_tags_stmt = text("DELETE FROM lead_tag WHERE lead_id = :lead_id")
+                await session.execute(delete_lead_tags_stmt, {"lead_id": lead_id})
+                await session.commit()
+                logger.info(f"Deleted tags for lead: {lead_id}")
+                
+                # 6. Finally, delete the lead itself
+                await self.lead_repository.delete_lead(lead_id)
+                logger.info(f"Deleted lead: {lead_id}")
+                
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error deleting lead {lead_id}: {str(e)}")
+                raise ValueError(f"Failed to delete lead: {str(e)}")
+            finally:
+                await session.close()
+        except Exception as e:
+            logger.error(f"Error obtaining database session: {str(e)}")
+            raise ValueError(f"Failed to delete lead: {str(e)}")
     
     async def get_paginated_leads(
         self,

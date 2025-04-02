@@ -121,3 +121,21 @@ async def check_db_connection() -> bool:
     except Exception as e:
         logger.error(f"Database connection check failed: {str(e)}")
         return False
+
+async def get_db_session() -> AsyncSession:
+    """
+    Get a database session directly.
+    This returns the session object directly rather than yielding it.
+    
+    Returns:
+        AsyncSession: A SQLAlchemy async session
+    """
+    session = SessionLocal()
+    try:
+        # Test the connection with a ping
+        await session.execute(text("SELECT 1"))
+        return session
+    except (exc.OperationalError, exc.InterfaceError) as e:
+        await session.close()
+        logger.error(f"Failed to connect to database: {str(e)}")
+        raise
