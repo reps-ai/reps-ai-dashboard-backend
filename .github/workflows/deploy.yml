@@ -11,5 +11,13 @@ jobs:
 
     steps:
       - name: Trigger Webhook on Mac mini
+        shell: bash
         run: |
-          curl -X GET "https://deploy-github.rthulabs.com/deploy?token=${{ secrets.DEPLOY_TOKEN }}"
+          set -eux
+          
+          # We use -f (fail), -s (silent), and -S (show-error) to ensure that
+          # a non-2xx response exits the script and the error is visible.
+          curl -f -s -S \
+            -X GET "https://deploy-github.rthulabs.com/deploy?token=${{ secrets.DEPLOY_TOKEN }}"
+          
+          echo "Deployment trigger request completed successfully!"
