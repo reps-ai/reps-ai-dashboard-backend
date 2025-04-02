@@ -21,4 +21,4 @@ jobs:
 
       - name: Connect and deploy
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/macmini_deploy_key home@ssh.rthulabs.com "bash ~/scripts/deploy.sh"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/macmini_deploy_key -p 2222 home@ssh.rthulabs.com "bash ~/scripts/deploy.sh"
