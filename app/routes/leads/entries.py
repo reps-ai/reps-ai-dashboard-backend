@@ -3,7 +3,7 @@ from fastapi import APIRouter, Query, Path, Body, Depends, HTTPException, status
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from app.schemas.leads.base import LeadCreate, LeadUpdate, LeadStatusUpdate
+from app.schemas.leads.base import LeadCreate, LeadCreateInput, LeadUpdate, LeadStatusUpdate
 from app.schemas.leads.responses import LeadResponse, LeadDetailResponse, LeadListResponse
 from app.dependencies import get_current_user, get_current_gym, get_current_branch, User, Gym, Branch, get_lead_service
 from backend.services.lead.implementation import DefaultLeadService
@@ -94,7 +94,8 @@ def format_lead_for_response(lead: Dict[str, Any]) -> Dict[str, Any]:
             tags.append({
                 "id": str(tag.get("id", "")),
                 "name": tag.get("name", ""),
-                "color": tag.get("color", "#888888")
+                # Add a default color if none is present
+                "color": tag.get("color") or "#888888"
             })
     formatted_lead["tags"] = tags
     
@@ -294,25 +295,28 @@ async def get_lead(
 
 @router.post("/", response_model=LeadResponse)
 async def create_lead(
-    lead: LeadCreate = Body(...),
+    lead: LeadCreateInput = Body(...),
     current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """
     Create a new lead.
-    Automatically associates the lead with the current user's gym.
+    Automatically associates the lead with the current user's gym and branch.
     """
-    # Convert Pydantic model to dictionary and add gym_id
+    # Convert Pydantic model to dictionary
     lead_data = lead.dict()
+    
+    # Add gym_id and branch_id from the dependencies
     lead_data["gym_id"] = str(current_gym.id)
+    lead_data["branch_id"] = str(current_branch.id)
+    
+    # Log the assigned branch for debugging
+    logger.info(f"Creating new lead assigned to branch: {current_branch.id} (Gym: {current_gym.id})")
     
     # Map "status" field to "lead_status" field expected by the database model
     if "status" in lead_data:
         lead_data["lead_status"] = lead_data.pop("status")
-    
-    # Convert branch_id UUID to string to avoid SQLAlchemy UUID errors
-    if "branch_id" in lead_data and lead_data["branch_id"] is not None:
-        lead_data["branch_id"] = str(lead_data["branch_id"])
     
     # Extract tags for later processing
     tags = None
@@ -350,6 +354,7 @@ async def update_lead(
     id: uuid.UUID = Path(..., description="The ID of the lead to update"),
     lead: LeadUpdate = Body(...),
     current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """
@@ -366,8 +371,14 @@ async def update_lead(
                 detail="Lead not found or does not belong to your gym"
             )
         
-        # Update the lead
+        # Update the lead, but ensure branch_id can't be changed by user
         lead_data = lead.dict(exclude_unset=True)
+        
+        # Remove branch_id if it exists in the input data
+        if "branch_id" in lead_data:
+            logger.warning(f"Attempt to modify branch_id for lead {id} - ignoring this field")
+            lead_data.pop("branch_id")
+        
         updated_lead = await lead_service.update_lead(str(id), lead_data)
         
         # Format updated lead to match the expected schema
@@ -394,6 +405,14 @@ async def get_leads_by_status(
 ):
     """Get leads by status."""
     try:
+        # Map status parameter to correct database field
+        # Valid statuses in the system are 'new', 'contacted', 'qualified', 'converted', 'lost'
+        valid_statuses = ['new', 'contacted', 'qualified', 'converted', 'lost']
+        
+        if status not in valid_statuses:
+            logger.warning(f"Invalid status '{status}' provided, using 'new' as default")
+            status = "new"
+            
         leads = await lead_service.get_leads_by_status(str(current_gym.id), status)
         total = len(leads)
         
