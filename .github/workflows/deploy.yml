@@ -10,15 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
-
-      - name: Add SSH Key
+      - name: Trigger Webhook on Mac mini
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.MACMINI_SSH_KEY }}" > ~/.ssh/macmini_deploy_key
-          chmod 600 ~/.ssh/macmini_deploy_key
-
-      - name: Connect and deploy
-        run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/macmini_deploy_key -p 2222 home@ssh.rthulabs.com "bash ~/scripts/deploy.sh"
+          curl -X POST https://deploy-github.rthulabs.com/deploy \
+            -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}"
