@@ -12,5 +12,4 @@ jobs:
     steps:
       - name: Trigger Webhook on Mac mini
         run: |
-          curl -X POST https://deploy-github.rthulabs.com/deploy \
-            -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}"
+          curl -X GET "https://deploy-github.rthulabs.com/deploy?token=${{ secrets.DEPLOY_TOKEN }}"
