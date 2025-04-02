@@ -2,8 +2,9 @@ name: Deploy to Mac mini
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   deploy:
