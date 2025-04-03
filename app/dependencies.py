@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from typing import Optional, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
+import os
+import logging
 
 # Import the necessary service and repository
 from backend.services.call.implementation import DefaultCallService
@@ -14,6 +16,9 @@ from backend.services.call.factory import create_call_service
 
 from backend.services.lead.implementation import DefaultLeadService
 from backend.db.repositories.lead.implementations import PostgresLeadRepository
+
+# Add logger for better error handling
+logger = logging.getLogger(__name__)
 
 # OAuth2 setup - will be used by oauth2.py
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
@@ -54,6 +59,9 @@ class Branch(BaseModel):
 SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
 
+# Get testing mode from environment variable (defaults to False)
+TESTING_MODE = os.environ.get("TESTING_MODE", "").lower() == "true"
+
 # Create mock objects for testing
 MOCK_USER_ID = 1
 MOCK_GYM_ID = uuid.UUID("facd154c-9be8-40fb-995f-27ea665d3a8b")  # Valid gym ID
@@ -64,26 +72,36 @@ MOCK_BRANCH_ID = uuid.UUID("8d8808a4-22f8-4af3-aec4-bab5b44b1aa7")  # Valid bran
 
 async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
     """
-    TESTING MODE: Always returns a mock user without authentication.
+    Get the current authenticated user or return a mock user in testing mode.
+    Will raise an authentication error if no token is provided and not in testing mode.
     """
     # Import the real authentication at runtime to avoid circular imports
-    from .auth.oauth2 import get_current_user as real_get_current_user
+    from .auth.oauth2 import get_current_user as oauth2_get_current_user
     
-    # If a token is provided and we're not in testing mode, use the real authentication
-    if token and token != "test":
-        # Pass both token and db session to the real function
-        return await real_get_current_user(token=token, session=db)
+    # Special case for testing mode
+    if TESTING_MODE:
+        logger.debug("Using testing mode authentication")
+        return User(
+            id=MOCK_USER_ID,
+            email="test@example.com",
+            first_name="Test",
+            last_name="User",
+            role="admin",
+            gym_id=MOCK_GYM_ID,
+            branch_id=MOCK_BRANCH_ID
+        )
+    
+    # For non-testing mode, we require a token
+    if not token:
+        logger.warning("Authentication attempt without token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
         
-    # For testing, bypass token validation and return a mock user
-    return User(
-        id=MOCK_USER_ID,
-        email="test@example.com",
-        first_name="Test",
-        last_name="User",
-        role="admin",
-        gym_id=MOCK_GYM_ID,
-        branch_id=MOCK_BRANCH_ID
-    )
+    # If a token is provided, use the real authentication
+    return await oauth2_get_current_user(token=token, session=db)
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
