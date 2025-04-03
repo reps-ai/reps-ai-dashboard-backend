@@ -21,4 +21,8 @@ jobs:
           echo -e "Host macmini\n  HostName ${{ secrets.MACMINI_HOST }}\n  User ${{ secrets.MACMINI_USER }}\n  IdentityFile ~/.ssh/macmini\n  StrictHostKeyChecking=no" >> ~/.ssh/config
 
       - name: Run deploy script on Mac mini
-        run: ssh macmini "bash ~/reps-ai-backend/reps-ai-dashboard-backend/scripts/deploy.sh"
+        run: |
+          ssh -i ~/.ssh/macmini \
+          -o StrictHostKeyChecking=no \
+          ${{ secrets.MACMINI_USER }}@${{ secrets.MACMINI_HOST }} \
+          "bash ~/reps-ai-backend/reps-ai-dashboard-backend/scripts/deploy.sh"
