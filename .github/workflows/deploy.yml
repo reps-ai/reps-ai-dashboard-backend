@@ -13,5 +13,5 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Run deploy script
-        run: bash ~/scripts/deploy.sh
+      - name: Run deploy script from repo root
+        run: bash ./scripts/deploy.sh
