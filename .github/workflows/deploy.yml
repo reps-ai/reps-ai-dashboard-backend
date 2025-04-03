@@ -1,24 +1,24 @@
-name: Deploy to Mac mini
+name: Auto Deploy to Mac mini
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Webhook on Mac mini
-        shell: bash
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
         run: |
-          set -eux
-          
-          # We use -f (fail), -s (silent), and -S (show-error) to ensure that
-          # a non-2xx response exits the script and the error is visible.
-          curl -f -s -S \
-            -X GET "https://deploy-github.rthulabs.com/deploy?token=${{ secrets.DEPLOY_TOKEN }}"
-          
-          echo "Deployment trigger request completed successfully!"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MACMINI_SSH_KEY }}" > ~/.ssh/macmini
+          chmod 600 ~/.ssh/macmini
+          echo -e "Host macmini\n  HostName ${{ secrets.MACMINI_HOST }}\n  User ${{ secrets.MACMINI_USER }}\n  IdentityFile ~/.ssh/macmini\n  StrictHostKeyChecking=no" >> ~/.ssh/config
+
+      - name: Run deploy script on Mac mini
+        run: ssh macmini "bash ~/reps-ai-backend/reps-ai-dashboard-backend/scripts/deploy.sh"
