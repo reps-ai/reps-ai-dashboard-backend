@@ -398,6 +398,7 @@ async def update_lead(
 @router.get("/status/{status}", response_model=LeadListResponse)
 async def get_leads_by_status(
     status: str = Path(..., description="The status to filter leads by"),
+    current_branch: Branch = Depends(get_current_branch),
     current_gym: Gym = Depends(get_current_gym),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
@@ -413,7 +414,7 @@ async def get_leads_by_status(
             logger.warning(f"Invalid status '{status}' provided, using 'new' as default")
             status = "new"
             
-        leads = await lead_service.get_leads_by_status(str(current_gym.id), status)
+        leads = await lead_service.get_leads_by_status(str(current_branch.id), status)
         total = len(leads)
         
         # Ensure pages is at least 1 to satisfy validation

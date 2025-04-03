@@ -271,7 +271,7 @@ class DefaultLeadService(LeadService):
         logger.info(f"Added tags to lead: {lead_id} -> {tag_list}")
         return lead
     
-    async def get_leads_by_status(self, gym_id: str, status: str) -> List[Dict[str, Any]]:
+    async def get_leads_by_status(self, branch_id: str, status: str) -> List[Dict[str, Any]]:
         """
         Get leads by status.
         
@@ -283,9 +283,9 @@ class DefaultLeadService(LeadService):
             List of leads with the specified status
         """
         # Map status to lead_status for database compatibility
-        leads = await self.lead_repository.get_leads_by_status(gym_id, status)
+        leads = await self.lead_repository.get_leads_by_status(branch_id, status)
         
-        logger.info(f"Retrieved {len(leads)} leads with status '{status}' for gym: {gym_id}")
+        logger.info(f"Retrieved {len(leads)} leads with status '{status}' for branch: {branch_id}")
         return leads
     
     async def delete_lead(self, lead_id: str) -> None:
