@@ -146,6 +146,15 @@ class CallDetailResponse(CallResponse):
     )
     metrics: Optional[Dict[str, float]] = Field(None, description="Call metrics and analysis")
     
+    @validator('transcript', pre=True)
+    def validate_transcript(cls, v):
+        """Ensure transcript is either None or a list"""
+        if v is None:
+            return None
+        if not isinstance(v, list):
+            return None  # Return None for non-list values
+        return v
+    
     class Config:
         schema_extra = {
             "example": {
