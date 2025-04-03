@@ -1,4 +1,4 @@
-name: Auto Deploy to Mac mini
+name: Deploy on PR Merge
 
 on:
   push:
@@ -7,22 +7,11 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.MACMINI_SSH_KEY }}" > ~/.ssh/macmini
-          chmod 600 ~/.ssh/macmini
-          echo -e "Host macmini\n  HostName ${{ secrets.MACMINI_HOST }}\n  User ${{ secrets.MACMINI_USER }}\n  IdentityFile ~/.ssh/macmini\n  StrictHostKeyChecking=no" >> ~/.ssh/config
-
-      - name: Run deploy script on Mac mini
-        run: |
-          ssh -i ~/.ssh/macmini \
-          -o StrictHostKeyChecking=no \
-          ${{ secrets.MACMINI_USER }}@${{ secrets.MACMINI_HOST }} \
-          "bash ~/reps-ai-backend/reps-ai-dashboard-backend/scripts/deploy.sh"
+      - name: Run deploy script
+        run: bash ~/reps-ai-backend/reps-ai-dashboard-backend/scripts/deploy.sh
