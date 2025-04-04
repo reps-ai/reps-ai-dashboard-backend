@@ -1,10 +1,11 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, logger, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
+
 
 # Import the necessary service and repository
 from backend.services.call.implementation import DefaultCallService
