@@ -281,7 +281,7 @@ class DefaultLeadService(LeadService):
             
         Returns:
             List of leads with the specified status
-
+        """
         leads = await self.lead_repository.get_leads_by_status(branch_id, status)
         
         logger.info(f"Retrieved {len(leads)} leads with status '{status}' for branch: {branch_id}")
@@ -404,7 +404,7 @@ class DefaultLeadService(LeadService):
             
         Returns:
             Dictionary containing the updated lead details
-
+        """
         # For immediate lightweight response
         # Check if tag_ids is actually a dict with use_background_task flag
         if isinstance(tag_ids, dict) and tag_ids.get("use_background_task", False):
