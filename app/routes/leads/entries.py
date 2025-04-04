@@ -281,7 +281,7 @@ async def get_prioritized_leads(
 @router.get("/{id}", response_model=LeadDetailResponse)
 async def get_lead(
     id: uuid.UUID = Path(..., description="The ID of the lead to retrieve"),
-    current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """
@@ -293,11 +293,11 @@ async def get_lead(
         lead = await lead_service.get_lead(str(id))
         
         # Verify lead belongs to user's gym
-        if str(lead.get("gym_id")) != str(current_gym.id):
-            logger.warning(f"Lead {id} does not belong to gym {current_gym.id}")
+        if str(lead.get("branch_id")) != str(current_branch.id):
+            logger.warning(f"Lead {id} does not belong to branch {current_branch.id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Lead not found or does not belong to your gym"
+                detail="Lead not found or does not belong to your branch"
             )
         
         # Format lead to match the expected schema
