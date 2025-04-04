@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.routes.calls import entries, details, campaign, webhooks
 
-router = APIRouter(prefix="/api/calls", tags=["calls"])
+router = APIRouter(prefix="/api/calls", tags=["Call Management"])
 
 # Include subrouters
 router.include_router(entries.router)

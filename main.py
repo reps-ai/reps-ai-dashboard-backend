@@ -19,10 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(auth.router, tags=["Authentication"])
-app.include_router(leads.router, tags=["Lead Management"])
-app.include_router(calls.router, tags=["Call Management"])
+# Include routers - with NO tags (they're defined in the router modules)
+app.include_router(auth.router)
+app.include_router(leads.router)
+app.include_router(calls.router)
 
 
 @app.get("/")
