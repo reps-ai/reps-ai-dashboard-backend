@@ -281,8 +281,7 @@ class DefaultLeadService(LeadService):
             
         Returns:
             List of leads with the specified status
-        """
-        # Note: The repository expects branch_id and internally maps status to lead_status
+
         leads = await self.lead_repository.get_leads_by_status(branch_id, status)
         
         logger.info(f"Retrieved {len(leads)} leads with status '{status}' for branch: {branch_id}")

@@ -1,24 +1,19 @@
-name: Deploy to Mac mini
+name: Deploy on PR Merge
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Trigger Webhook on Mac mini
-        shell: bash
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Make deploy script executable and run it
         run: |
-          set -eux
-          
-          # We use -f (fail), -s (silent), and -S (show-error) to ensure that
-          # a non-2xx response exits the script and the error is visible.
-          curl -f -s -S \
-            -X GET "https://deploy-github.rthulabs.com/deploy?token=${{ secrets.DEPLOY_TOKEN }}"
-          
-          echo "Deployment trigger request completed successfully!"
+          chmod +x /Users/home/scripts/deploy.sh
+          /Users/home/scripts/deploy.sh

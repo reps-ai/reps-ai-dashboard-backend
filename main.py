@@ -7,7 +7,7 @@ from app.routes import auth, leads, calls
 app = FastAPI(
     title="Gym AI Voice Agent API",
     description="API for AI Voice Agent system for gyms",
-    version="0.1.0"
+    version="0.1.0",
 )
 
 # Configure CORS
@@ -19,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers - with NO tags (they're defined in the router modules)
 app.include_router(auth.router)
 app.include_router(leads.router)
 app.include_router(calls.router)
