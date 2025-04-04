@@ -244,6 +244,94 @@ async def get_leads_by_branch(
             detail=f"An unexpected error occurred: {str(e)}"
         )
 
+@router.get("/prioritized", response_model=List[LeadResponse])
+async def get_prioritized_leads(
+    count: int = Query(10, ge=1, le=50, description="Number of leads to return"),
+    qualification: Optional[str] = Query(None, description="Qualification filter (hot, cold, neutral)"),
+    exclude_leads: Optional[str] = Query(None, description="Comma-separated list of lead IDs to exclude"),
+    current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
+    lead_service: DefaultLeadService = Depends(get_lead_service)
+):
+    """Get prioritized leads for outreach."""
+    try:
+        exclude_list = exclude_leads.split(",") if exclude_leads else None
+        logger.info(f"Retrieving prioritized leads for branch: {current_branch.id}")
+        leads = await lead_service.get_prioritized_leads(str(current_branch.id), count, qualification, exclude_list)
+        
+        # Format leads to match the expected schema
+        formatted_leads = [format_lead_for_response(lead) for lead in leads]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
+        return formatted_leads
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving prioritized leads: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+@router.get("/status/{status}", response_model=LeadListResponse)
+async def get_leads_by_status(
+    status: str = Path(..., description="The status to filter leads by"),
+    current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    lead_service: DefaultLeadService = Depends(get_lead_service)
+):
+    """Get leads by status."""
+    try:
+        # Map status parameter to correct database field
+        # Valid statuses in the system are 'new', 'contacted', 'qualified', 'converted', 'lost'
+        valid_statuses = ['new', 'contacted', 'qualified', 'converted', 'lost']
+        
+        if status not in valid_statuses:
+            logger.warning(f"Invalid status '{status}' provided, using 'new' as default")
+            status = "new"
+            
+        logger.info(f"Fetching leads with status '{status}' for branch: {current_branch.id}")
+        leads = await lead_service.get_leads_by_status(str(current_branch.id), status)
+        total = len(leads)
+        
+        # Ensure pages is at least 1 to satisfy validation
+        pages = max(1, (total + limit - 1) // limit)
+        
+        start_idx, end_idx = (page - 1) * limit, min(page * limit, total)
+        
+        # Format leads to match the expected schema
+        formatted_leads = [format_lead_for_response(lead) for lead in leads[start_idx:end_idx]]
+        
+        # Normalize lead statuses to ensure they match allowed values
+        formatted_leads = normalize_lead_status(formatted_leads)
+        
+        return {
+            "data": formatted_leads, 
+            "pagination": {
+                "total": total, 
+                "page": page, 
+                "limit": limit, 
+                "pages": pages
+            }
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
+
 @router.get("/{id}", response_model=LeadDetailResponse)
 async def get_lead(
     id: uuid.UUID = Path(..., description="The ID of the lead to retrieve"),
@@ -387,122 +475,6 @@ async def update_lead(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND if "not found" in str(e).lower() else status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
-
-@router.get("/status/{status}", response_model=LeadListResponse)
-async def get_leads_by_status(
-    status: str = Path(..., description="The status to filter leads by"),
-    current_gym: Gym = Depends(get_current_gym),
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
-    lead_service: DefaultLeadService = Depends(get_lead_service)
-):
-    """Get leads by status."""
-    try:
-        # Map status parameter to correct database field
-        # Valid statuses in the system are 'new', 'contacted', 'qualified', 'converted', 'lost'
-        valid_statuses = ['new', 'contacted', 'qualified', 'converted', 'lost']
-        
-        if status not in valid_statuses:
-            logger.warning(f"Invalid status '{status}' provided, using 'new' as default")
-            status = "new"
-            
-        leads = await lead_service.get_leads_by_status(str(current_gym.id), status)
-        total = len(leads)
-        
-        # Ensure pages is at least 1 to satisfy validation
-        pages = max(1, (total + limit - 1) // limit)
-        
-        start_idx, end_idx = (page - 1) * limit, min(page * limit, total)
-        
-        # Format leads to match the expected schema
-        formatted_leads = [format_lead_for_response(lead) for lead in leads[start_idx:end_idx]]
-        
-        # Normalize lead statuses to ensure they match allowed values
-        formatted_leads = normalize_lead_status(formatted_leads)
-        
-        return {
-            "data": formatted_leads, 
-            "pagination": {
-                "total": total, 
-                "page": page, 
-                "limit": limit, 
-                "pages": pages
-            }
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
-
-@router.get("/prioritized", response_model=List[LeadResponse])
-async def get_prioritized_leads(
-    count: int = Query(10, ge=1, le=50, description="Number of leads to return"),
-    qualification: Optional[str] = Query(None, description="Qualification filter (hot, cold, neutral)"),
-    exclude_leads: Optional[str] = Query(None, description="Comma-separated list of lead IDs to exclude"),
-    current_gym: Gym = Depends(get_current_gym),
-    lead_service: DefaultLeadService = Depends(get_lead_service)
-):
-    """Get prioritized leads for outreach."""
-    try:
-        exclude_list = exclude_leads.split(",") if exclude_leads else None
-        leads = await lead_service.get_prioritized_leads(str(current_gym.id), count, qualification, exclude_list)
-        
-        # Format leads to match the expected schema
-        formatted_leads = [format_lead_for_response(lead) for lead in leads]
-        
-        # Normalize lead statuses to ensure they match allowed values
-        formatted_leads = normalize_lead_status(formatted_leads)
-        
-        return formatted_leads
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
-
-@router.post("/{id}/qualify", response_model=LeadResponse)
-async def qualify_lead(
-    id: uuid.UUID = Path(..., description="The ID of the lead to qualify"),
-    qualification: str = Query(..., description="Qualification status (hot, cold, neutral)"),
-    current_gym: Gym = Depends(get_current_gym),
-    lead_service: DefaultLeadService = Depends(get_lead_service)
-):
-    """Update lead qualification status."""
-    try:
-        # Verify lead belongs to user's gym
-        existing_lead = await lead_service.get_lead(str(id))
-        if str(existing_lead.get("gym_id")) != str(current_gym.id):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Lead not found or does not belong to your gym"
-            )
-            
-        lead = await lead_service.qualify_lead(str(id), qualification)
-        
-        # Format lead to match the expected schema
-        formatted_lead = format_lead_for_response(lead)
-        return formatted_lead
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:

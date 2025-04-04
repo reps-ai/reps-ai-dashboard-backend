@@ -339,9 +339,15 @@ def build_lead_filters(base_query, filters: Dict[str, Any]):
     """
     conditions = []
     
-    # Status filter
+    # Status filter - check for both "status" and "lead_status" keys
     if "status" in filters:
         status = filters["status"]
+        if isinstance(status, list):
+            conditions.append(Lead.lead_status.in_(status))
+        else:
+            conditions.append(Lead.lead_status == status)
+    elif "lead_status" in filters:
+        status = filters["lead_status"]
         if isinstance(status, list):
             conditions.append(Lead.lead_status.in_(status))
         else:
