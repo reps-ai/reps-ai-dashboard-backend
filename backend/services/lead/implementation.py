@@ -394,3 +394,45 @@ class DefaultLeadService(LeadService):
             f"page: {page}, total: {pagination.get('total', 0)}"
         )
         return result
+    
+    async def remove_tags_from_lead(self, lead_id: str, tag_ids: List[str]) -> Dict[str, Any]:
+        """
+        Remove tags from a lead.
+        
+        Args:
+            lead_id: ID of the lead
+            tag_ids: List of tag IDs to remove
+            
+        Returns:
+            Dictionary containing the updated lead details
+        """
+        # For immediate lightweight response
+        # Check if tag_ids is actually a dict with use_background_task flag
+        if isinstance(tag_ids, dict) and tag_ids.get("use_background_task", False):
+            # Extract the actual tag IDs
+            tag_list = tag_ids.get("values", [])
+            
+            # Import here to avoid circular imports
+            from ...tasks.lead.task_definitions import remove_tags_from_lead as remove_tags_task
+            
+            # Queue the task for background processing
+            remove_tags_task.delay(lead_id, tag_list)
+            
+            # Return minimal information immediately
+            return {"id": lead_id, "status": "remove_tags_queued"}
+        
+        # Otherwise, process tag removal synchronously
+        # Validate tag_ids, handling the case where tag_ids might be a dict from above logic
+        tag_list = tag_ids.get("values", []) if isinstance(tag_ids, dict) else tag_ids
+        
+        if not tag_list:
+            return await self.get_lead(lead_id)
+        
+        # Remove tags
+        lead = await self.lead_repository.remove_tags_from_lead(lead_id, tag_list)
+        
+        if not lead:
+            raise ValueError(f"Lead not found: {lead_id}")
+        
+        logger.info(f"Removed tags from lead: {lead_id} -> {tag_list}")
+        return lead

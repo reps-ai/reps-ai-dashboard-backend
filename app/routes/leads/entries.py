@@ -520,7 +520,7 @@ async def add_tags_to_lead(
 async def remove_tags_from_lead(
     id: uuid.UUID = Path(..., description="The ID of the lead to remove tags from"),
     tags: List[uuid.UUID] = Body(..., description="List of tag IDs to remove"),
-    current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """
@@ -530,7 +530,7 @@ async def remove_tags_from_lead(
     try:
         # Verify lead belongs to user's gym
         existing_lead = await lead_service.get_lead(str(id))
-        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+        if str(existing_lead.get("branch_id")) != str(current_branch.id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Lead not found or does not belong to your gym"
@@ -557,38 +557,6 @@ async def remove_tags_from_lead(
             detail=f"An unexpected error occurred: {str(e)}"
         )
 
-@router.post("/{id}/after-call", response_model=LeadResponse)
-async def update_lead_after_call(
-    id: uuid.UUID = Path(..., description="The ID of the lead to update"),
-    call_data: Dict[str, Any] = Body(..., description="Call data for updating the lead"),
-    current_gym: Gym = Depends(get_current_gym),
-    lead_service: DefaultLeadService = Depends(get_lead_service)
-):
-    """Update lead information after a call."""
-    try:
-        # Verify lead belongs to user's gym
-        existing_lead = await lead_service.get_lead(str(id))
-        if str(existing_lead.get("gym_id")) != str(current_gym.id):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Lead not found or does not belong to your gym"
-            )
-            
-        lead = await lead_service.update_lead_after_call(str(id), call_data)
-        
-        # Format lead to match the expected schema
-        formatted_lead = format_lead_for_response(lead)
-        return formatted_lead
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
 
 @router.delete("/{id}", response_model=Dict[str, str])
 async def delete_lead(
@@ -620,45 +588,6 @@ async def delete_lead(
             detail=str(e)
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
-        )
-
-@router.post("/{id}/status", response_model=LeadResponse)
-async def update_lead_status(
-    id: uuid.UUID = Path(..., description="The ID of the lead to update"),
-    status_update: LeadStatusUpdate = Body(...),
-    current_gym: Gym = Depends(get_current_gym),
-    lead_service: DefaultLeadService = Depends(get_lead_service)
-):
-    """
-    Update the status of a lead.
-    Only updates the lead if it belongs to the current user's gym.
-    """
-    try:
-        # Verify lead belongs to user's gym
-        existing_lead = await lead_service.get_lead(str(id))
-        if str(existing_lead.get("gym_id")) != str(current_gym.id):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Lead not found or does not belong to your gym"
-            )
-            
-        # Update only the status field
-        update_data = {"status": status_update.status}
-        updated_lead = await lead_service.update_lead(str(id), update_data)
-        
-        # Format lead to match the expected schema
-        formatted_lead = format_lead_for_response(updated_lead)
-        return formatted_lead
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(f"Error updating lead status: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred: {str(e)}"
