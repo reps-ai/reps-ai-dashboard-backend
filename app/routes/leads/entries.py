@@ -487,14 +487,14 @@ async def update_lead(
 async def add_tags_to_lead(
     id: uuid.UUID = Path(..., description="The ID of the lead to add tags to"),
     tags: List[uuid.UUID] = Body(..., description="List of tags to add"),
-    current_gym: Gym = Depends(get_current_gym),
+    current_branch: Branch = Depends(get_current_branch),
     lead_service: DefaultLeadService = Depends(get_lead_service)
 ):
     """Add tags to a lead."""
     try:
         # Verify lead belongs to user's gym
         existing_lead = await lead_service.get_lead(str(id))
-        if str(existing_lead.get("gym_id")) != str(current_gym.id):
+        if str(existing_lead.get("branch_id")) != str(current_branch.id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Lead not found or does not belong to your gym"
