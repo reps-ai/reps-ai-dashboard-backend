@@ -19,7 +19,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers - removing tags as they're likely defined in the router modules
 app.include_router(auth.router)
 app.include_router(leads.router)
 app.include_router(calls.router)
