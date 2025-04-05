@@ -45,23 +45,23 @@ cacheable_paths = {
     "/health": 1800,                  # 30 minutes for health check
 }
 
-# Create HttpResponseCacheMiddleware directly
-http_cache_middleware = HttpResponseCacheMiddleware(
-    app=None,  # This will be set by FastAPI
-    cacheable_paths=cacheable_paths,
-    enable_cache_header=True
-)
-
-# Add the middleware to the app
+# Add the middleware to the app - only need to do this once
 app.add_middleware(
     HttpResponseCacheMiddleware,
     cacheable_paths=cacheable_paths,
     enable_cache_header=True
 )
 
-# Store middleware in app.state for diagnostics
-app.state.http_cache_middleware = http_cache_middleware
-logger.info("HTTP cache middleware stored in app.state")
+# Get a reference to the actual middleware instance
+# FastAPI middleware stack has the middleware instances in reverse order
+# So the last one added is at index 0
+if app.middleware_stack and hasattr(app.middleware_stack.middlewares, "__getitem__"):
+    http_cache_middleware = app.middleware_stack.middlewares[0]
+    # Store middleware in app.state for diagnostics
+    app.state.http_cache_middleware = http_cache_middleware
+    logger.info("HTTP cache middleware stored in app.state")
+else:
+    logger.warning("Could not get reference to HTTP cache middleware")
 
 app.include_router(auth.router)
 app.include_router(leads.router)
@@ -112,6 +112,13 @@ async def startup_event():
             # Set a test key to verify write operations
             await redis_client.setex("startup:test", 30, "Application startup test")
             logger.info(f"Redis write operation successful")
+            
+            # Manually verify that the get_redis_client function returns the correct client
+            test_client = get_redis_client()
+            if test_client:
+                logger.info("get_redis_client() is working correctly")
+            else:
+                logger.error("get_redis_client() returned None even though Redis was initialized")
         else:
             logger.error("Redis ping failed")
             raise Exception("Redis ping failed")
