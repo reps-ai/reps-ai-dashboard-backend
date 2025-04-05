@@ -22,6 +22,7 @@ from ....helpers.lead.lead_queries import (
     get_leads_for_retry_db
 )
 from .....utils.logging.logger import get_logger
+from .....cache.repository_cache import repository_cache
 
 #TODO: figure out the compatibility issue with fastapi and pydantic
 
@@ -45,6 +46,7 @@ class PostgresLeadRepository(LeadRepository):
         return await get_lead_with_related_data(self.session, lead.id)
     
     #Works
+    @repository_cache(namespace="lead_query", ttl=300)
     async def get_lead_by_id(self, lead_id: str) -> Optional[Dict[str, Any]]:
         """Get lead details by ID."""
         try:
@@ -101,6 +103,7 @@ class PostgresLeadRepository(LeadRepository):
         return True
     
     #Works
+    @repository_cache(namespace="lead_query", ttl=300)
     async def get_leads_by_branch(
         self,
         branch_id: str,
@@ -118,6 +121,7 @@ class PostgresLeadRepository(LeadRepository):
         )
     
     #Ignore
+    @repository_cache(namespace="lead_query", ttl=300)
     async def get_leads_by_qualification(
         self,
         gym_id: str,
@@ -236,6 +240,7 @@ class PostgresLeadRepository(LeadRepository):
         """Update lead information after a call."""
         return await update_lead_after_call_db(self.session, lead_id, call_data)
     
+    @repository_cache(namespace="lead_query", ttl=300)
     async def get_lead_call_history(
         self,
         lead_id: str,
@@ -249,25 +254,21 @@ class PostgresLeadRepository(LeadRepository):
         lead = lead_result.scalar_one_or_none()
         
         if not lead:
-            return {
-                "calls": [],
-                "pagination": {
-                    "total": 0,
-                    "page": page,
-                    "page_size": page_size,
-                    "pages": 0
-                }
-            }
+            return {"calls": [], "pagination": {"total": 0, "pages": 0}}
         
-        # Count total calls
-        count_query = select(func.count()).select_from(
-            select(CallLog).where(CallLog.lead_id == lead_id).subquery()
+        # Get total count for pagination
+        count_query = (
+            select(func.count(CallLog.id))
+            .where(CallLog.lead_id == lead_id)
         )
-        total_count = await self.session.execute(count_query)
-        total = total_count.scalar_one()
+        count_result = await self.session.execute(count_query)
+        total_calls = count_result.scalar_one() or 0
         
-        # Get calls with pagination
+        # Calculate pagination
+        total_pages = (total_calls + page_size - 1) // page_size
         offset = (page - 1) * page_size
+        
+        # Get call logs with pagination
         calls_query = (
             select(CallLog)
             .where(CallLog.lead_id == lead_id)
@@ -278,17 +279,82 @@ class PostgresLeadRepository(LeadRepository):
         calls_result = await self.session.execute(calls_query)
         calls = calls_result.scalars().all()
         
+        # Format call logs
+        call_list = []
+        for call in calls:
+            call_dict = {
+                "id": str(call.id),
+                "lead_id": str(call.lead_id),
+                "agent_id": str(call.agent_id) if call.agent_id else None,
+                "duration": call.duration,
+                "status": call.status,
+                "outcome": call.outcome,
+                "notes": call.notes,
+                "recording_url": call.recording_url,
+                "created_at": call.created_at.isoformat(),
+                "updated_at": call.updated_at.isoformat() if call.updated_at else None
+            }
+            call_list.append(call_dict)
+        
         return {
-            "calls": [call.to_dict() for call in calls],
+            "calls": call_list,
             "pagination": {
-                "total": total,
+                "total": total_calls,
+                "pages": total_pages,
                 "page": page,
-                "page_size": page_size,
-                "pages": (total + page_size - 1) // page_size
+                "page_size": page_size
             }
         }
     
+    async def update_lead_notes(self, lead_id: str, notes: str) -> Optional[Dict[str, Any]]:
+        """
+        Update lead notes.
+
+        Args:
+            lead_id: Unique identifier of the lead
+            notes: New notes content
+
+        Returns:
+            Updated lead data if successful, None if lead not found
+        """
+        # Check if lead exists
+        return await update_lead_db(self.session, lead_id, {"notes": notes})
+
     #Works
+    @repository_cache(namespace="lead_query", ttl=300)
+    async def get_leads_by_status(
+        self,
+        gym_id: str,
+        status: str,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """Get leads by status."""
+        filters = {"status": status}
+        return await get_leads_by_gym_with_filters(
+            self.session,
+            gym_id,
+            filters,
+            page,
+            page_size
+        )
+
+    #Works
+    async def update_lead_status(self, lead_id: str, status: str) -> Optional[Dict[str, Any]]:
+        """
+        Update lead status.
+
+        Args:
+            lead_id: Unique identifier of the lead
+            status: New status
+
+        Returns:
+            Updated lead data if successful, None if lead not found
+        """
+        # Check if lead exists
+        return await update_lead_db(self.session, lead_id, {"lead_status": status})
+
+    @repository_cache(namespace="lead_query", ttl=600)
     async def get_prioritized_leads(
         self,
         branch_id: str,
@@ -305,6 +371,7 @@ class PostgresLeadRepository(LeadRepository):
             exclude_leads
         )
     
+    @repository_cache(namespace="lead_query", ttl=600)
     async def get_leads_for_retry(
         self,
         campaign_id: str,
@@ -312,55 +379,3 @@ class PostgresLeadRepository(LeadRepository):
     ) -> List[Dict[str, Any]]:
         """Get leads eligible for retry calls."""
         return await get_leads_for_retry_db(self.session, campaign_id, gap_days) 
-    
-
-    async def update_lead_notes(self, lead_id: str, notes: str) -> Optional[Dict[str, Any]]:
-        """
-        Update lead notes.
-
-        Args:
-            lead_id: Unique identifier of the lead
-            notes: New notes content
-
-        Returns:
-            Updated lead data if successful, None if lead not found
-        """
-        # Check if lead exists
-        return await update_lead_db(self.session, lead_id, {"notes": notes})
-
-    #Works
-    async def get_leads_by_status(self, branch_id: str, status: str) -> List[Dict[str, Any]]:
-        """
-        Get leads by status.
-
-        Args:
-            branch_id: Unique identifier of the branch
-            status: Status to filter by
-
-        Returns:
-            List of lead data with the specified status
-        """
-        filters = {"lead_status": status}
-        results = await get_leads_by_gym_with_filters(
-            self.session,
-            branch_id,
-            filters,
-            page=1,
-            page_size=100
-        )
-        return results.get("leads", [])
-
-    #Works
-    async def update_lead_status(self, lead_id: str, status: str) -> Optional[Dict[str, Any]]:
-        """
-        Update lead status.
-
-        Args:
-            lead_id: Unique identifier of the lead
-            status: New status
-
-        Returns:
-            Updated lead data if successful, None if lead not found
-        """
-        # Check if lead exists
-        return await update_lead_db(self.session, lead_id, {"lead_status": status})
