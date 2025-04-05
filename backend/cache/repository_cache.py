@@ -9,8 +9,9 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Union
 import time
 
-from . import redis_client
+from . import get_redis_client
 from ..utils.logging.logger import get_logger
+from ..utils.serialization import serialize_to_json, deserialize_from_json
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,9 @@ def repository_cache(namespace: str, ttl: int = 60):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            # Get Redis client
+            redis_client = get_redis_client()
+            
             # Skip caching if Redis client is not available
             if not redis_client:
                 logger.warning(f"Redis client not available, skipping cache for {func.__name__}")
@@ -51,8 +55,8 @@ def repository_cache(namespace: str, ttl: int = 60):
                 
                 if entity_id:
                     # Get all keys in this namespace that might contain this ID
-                    pattern = f"{namespace}:*{entity_id}*"
                     try:
+                        pattern = f"{namespace}:*{entity_id}*"
                         keys = await redis_client.keys(pattern)
                         if keys:
                             await redis_client.delete(*keys)
@@ -95,15 +99,19 @@ def repository_cache(namespace: str, ttl: int = 60):
             start_time = time.time()
             
             # Try to get from cache
-            cached_data = await redis_client.get(cache_key)
-            if cached_data:
-                try:
-                    logger.debug(f"Cache hit for {func.__name__} ({cache_key}), " +
-                                f"time: {(time.time() - start_time):.6f}s")
-                    return json.loads(cached_data)
-                except Exception as e:
-                    logger.error(f"Error deserializing cached data: {str(e)}")
-                    # Fall through to non-cached path
+            try:
+                cached_data = await redis_client.get(cache_key)
+                if cached_data:
+                    try:
+                        logger.debug(f"Cache hit for {func.__name__} ({cache_key}), " +
+                                    f"time: {(time.time() - start_time):.6f}s")
+                        return deserialize_from_json(cached_data)
+                    except Exception as e:
+                        logger.error(f"Error deserializing cached data: {str(e)}")
+                        # Fall through to non-cached path
+            except Exception as e:
+                logger.error(f"Error retrieving from cache: {str(e)}")
+                # Fall through to non-cached path
                 
             # Execute function if not in cache
             result = await func(*args, **kwargs)
@@ -111,7 +119,8 @@ def repository_cache(namespace: str, ttl: int = 60):
             # Cache result if it's valid (not None)
             if result is not None:
                 try:
-                    await redis_client.setex(cache_key, ttl, json.dumps(result))
+                    # Use custom serialization that handles UUIDs
+                    await redis_client.setex(cache_key, ttl, serialize_to_json(result))
                     logger.debug(f"Cached result for {func.__name__} ({cache_key}), TTL: {ttl}s")
                 except Exception as e:
                     logger.error(f"Error caching result: {str(e)}")
