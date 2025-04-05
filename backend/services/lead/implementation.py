@@ -287,6 +287,31 @@ class DefaultLeadService(LeadService):
         logger.info(f"Retrieved {len(leads)} leads with status '{status}' for branch: {branch_id}")
         return leads
     
+    async def remove_tags_from_lead(self, lead_id: str, tags: List[str]) -> Dict[str, Any]:
+        """
+        Remove tags from a lead.
+        
+        Args:
+            lead_id: ID of the lead
+            tags: List of tag IDs to remove
+            
+        Returns:
+            Dictionary containing the updated lead details
+        """
+        # Check if lead exists
+        lead = await self.lead_repository.get_lead_by_id(lead_id)
+        if not lead:
+            raise ValueError(f"Lead not found: {lead_id}")
+        
+        # Remove tags
+        lead = await self.lead_repository.remove_tags_from_lead(lead_id, tags)
+        
+        if not lead:
+            raise ValueError(f"Failed to remove tags from lead: {lead_id}")
+        
+        logger.info(f"Removed tags from lead: {lead_id} -> {tags}")
+        return lead
+    
     async def delete_lead(self, lead_id: str) -> None:
         """
         Delete a lead by ID.
