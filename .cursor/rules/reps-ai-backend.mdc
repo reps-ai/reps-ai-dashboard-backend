@@ -1,0 +1,21 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Your rule content
+This is the rule system for my reps ai backend project. 
+The architecture is very simple. 
+1. FastAPI app that opens up our API's so that our frontend can talk to this backend.
+2. We have a backend layer that actually performs the required operations for the API layer, this includes talking to the database, perfoming background tasks, and more. 
+3. Our backend layer is broken down into more layers. 
+    a. Service Layer - Serves as a template with HOW we talk to our CRM, can be internal or external (in our case it's internal and is a database repo)
+    b. Database repository - Standardizes how we talk to our database so we have plug and play functionality with different providers by just calling the required functions. 
+    c. Integrations layer where we have connected retell ai for the voice agent. 
+- You can @ files here
+  [main.py](mdc:main.py) is the main fastAPI app.
+- You can use markdown but dont have to
+1. You need to ensure that you are checking our code version from [requirements.txt](mdc:requirements.txt) and make sure that the code you are writing is in accordance with that.
+2. WHENEVER you don't have ALL the information you need, you need to stop me and clarify it. 
+3. You are expected to perform code runs DIRECTLY in the agent window to verify that your scripts are working and to debug. 

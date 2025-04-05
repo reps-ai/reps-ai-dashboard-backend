@@ -7,6 +7,8 @@ from datetime import datetime
 from .interface import LeadService
 from ...db.repositories.lead import LeadRepository
 from ...utils.logging.logger import get_logger
+from ...cache.service_cache import service_cache
+from ...cache.invalidation import invalidate_lead, invalidate_branch_leads
 
 logger = get_logger(__name__)
 
@@ -51,9 +53,15 @@ class DefaultLeadService(LeadService):
             lead = await self.lead_repository.get_lead_by_id(str(lead["id"]))
         
         logger.info(f"Created new lead: {lead.get('id')}")
+        
+        # Invalidate any cached list of leads for this branch
+        if branch_id := lead_data.get("branch_id"):
+            await invalidate_branch_leads(str(branch_id))
+            
         return lead
     
     #correct parameters
+    @service_cache(namespace="lead", ttl=300)
     async def get_lead(self, lead_id: str) -> Dict[str, Any]:
         """
         Get lead details by ID.
@@ -98,8 +106,17 @@ class DefaultLeadService(LeadService):
             raise ValueError(f"Lead not found: {lead_id}")
         
         logger.info(f"Updated lead: {lead_id}")
+        
+        # Invalidate cache for this lead
+        await invalidate_lead(lead_id)
+        
+        # Invalidate branch lead lists if branch_id is available
+        if branch_id := lead.get("branch_id"):
+            await invalidate_branch_leads(str(branch_id))
+            
         return lead
     
+    @service_cache(namespace="leads", ttl=300)
     async def get_prioritized_leads(
         self, 
         gym_id: str, 
@@ -181,6 +198,10 @@ class DefaultLeadService(LeadService):
             raise ValueError(f"Lead not found: {lead_id}")
         
         logger.info(f"Updated lead after call: {lead_id}, call: {call_data.get('call_id')}")
+        
+        # Invalidate cache for this lead
+        await invalidate_lead(lead_id)
+        
         return lead
     
     #Background Task
@@ -226,6 +247,10 @@ class DefaultLeadService(LeadService):
             raise ValueError(f"Lead not found: {lead_id}")
         
         logger.info(f"Updated lead qualification: {lead_id} -> {qual_value}")
+        
+        # Invalidate cache for this lead
+        await invalidate_lead(lead_id)
+        
         return lead
     
     #Manually Adding Tag -> Foreground Task, Automatically Adding Tag -> Background Task 
@@ -253,14 +278,15 @@ class DefaultLeadService(LeadService):
             add_tags_task.delay(lead_id, tag_list)
             
             # Return minimal information immediately
-            return {"id": lead_id, "status": "add_tags_queued"}
+            return {"id": lead_id, "status": "tags_queued"}
         
         # Otherwise, process tags synchronously
-        # Validate tags, handling the case where tags might be a dict from above logic
+        # Handle different tag formats - could be a dict with values
         tag_list = tags.get("values", []) if isinstance(tags, dict) else tags
         
-        if not tag_list:
-            return await self.get_lead(lead_id)
+        # Ensure tags is a list
+        if not isinstance(tag_list, list):
+            tag_list = [tag_list]
         
         # Add tags
         lead = await self.lead_repository.add_tags_to_lead(lead_id, tag_list)
@@ -269,6 +295,10 @@ class DefaultLeadService(LeadService):
             raise ValueError(f"Lead not found: {lead_id}")
         
         logger.info(f"Added tags to lead: {lead_id} -> {tag_list}")
+        
+        # Invalidate cache for this lead
+        await invalidate_lead(lead_id)
+        
         return lead
     
     async def get_leads_by_status(self, branch_id: str, status: str) -> List[Dict[str, Any]]:

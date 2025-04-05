@@ -1,8 +1,14 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from backend.db.connections.database import check_db_connection
+from backend.cache import setup_redis
+from backend.cache.http_cache import HttpResponseCacheMiddleware
+import os
 
 from app.routes import auth, leads, calls
+
+# Get Redis URL from environment variable or use default
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 app = FastAPI(
     title="Gym AI Voice Agent API",
@@ -17,6 +23,18 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Add HTTP response caching middleware
+app.add_middleware(
+    HttpResponseCacheMiddleware,
+    cacheable_paths={
+        "/api/leads": 300,                # 5 minutes for lead lists
+        "/api/leads/prioritized": 600,    # 10 minutes for prioritized leads
+        "/api/leads/branch/": 300,        # 5 minutes for branch leads
+        "/health": 1800,                  # 30 minutes for health check
+    },
+    enable_cache_header=True
 )
 
 app.include_router(auth.router)
@@ -45,6 +63,20 @@ async def health_check():
         "status": "healthy",
         "database": "connected"
     }
+
+@app.on_event("startup")
+async def startup_event():
+    """
+    Run on application startup.
+    Initialize services like Redis.
+    """
+    # Initialize Redis client
+    try:
+        redis_client = setup_redis(REDIS_URL)
+        print(f"Redis client initialized with URL: {REDIS_URL}")
+    except Exception as e:
+        print(f"Warning: Redis client initialization failed: {str(e)}")
+        print("Caching will be disabled")
 
 if __name__ == "__main__":
     import uvicorn
