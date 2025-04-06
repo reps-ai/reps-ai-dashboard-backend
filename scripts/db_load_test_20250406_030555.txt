@@ -1,0 +1,11 @@
+Database Load Test Results
+==========================
+
+total_queries: 200
+successful_queries: 200
+failed_queries: 0
+total_time: 9.953501224517822
+avg_time_per_query: 0.04976750612258911
+queries_per_second: 20.09343199831561
+concurrency: 30
+test_date: 2025-04-06T03:05:55.055532
