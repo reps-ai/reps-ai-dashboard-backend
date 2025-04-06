@@ -26,12 +26,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 # Token settings directly from environment variables
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "your-secret-key-replace-in-production")
 ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
-try:
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-    if ACCESS_TOKEN_EXPIRE_MINUTES <= 0 or ACCESS_TOKEN_EXPIRE_MINUTES > 1440:  # Max 24 hours
-        ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Default to 30 minutes if value is invalid
-except (ValueError, TypeError):
-    ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Default to 30 minutes if conversion fails
+# Define maximum token expiry time (24 hours)
+MAX_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
+
+# Hardcoded token expiration time to 24 hours (1440 minutes)
+ACCESS_TOKEN_EXPIRE_MINUTES = 14400
 
 
 class TokenData:
