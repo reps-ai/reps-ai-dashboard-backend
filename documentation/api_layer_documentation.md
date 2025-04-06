@@ -41,7 +41,7 @@ The system uses JWT (JSON Web Tokens) for authentication with the following comp
 Located at `app/routes/auth/`:
 
 - `POST /auth/login`: Authenticates users and returns a JWT token
-- `POST /auth/register`: Creates new user accounts (admin only)
+- `POST /auth/register`: Creates new user accounts
 - `GET /auth/me`: Returns the current authenticated user's profile
 - `POST /auth/refresh`: Refreshes an existing JWT token
 - `PUT /auth/change-password`: Changes the user's password
@@ -68,10 +68,11 @@ Located at `app/routes/leads/`:
 - `GET /leads/prioritized`: Get leads sorted by priority score
 - `GET /leads/search`: Search leads by name, phone, email
 - `POST /leads/import`: Bulk import leads from CSV/Excel
-- `GET /leads/stats`: Get lead statistics
-- `GET /leads/{lead_id}/calls`: Get all calls associated with a lead
-- `GET /leads/{lead_id}/appointments`: Get all appointments for a lead
+- `GET /leads/stats`: Get lead statistics (to be implemented)
+- `GET /leads/{lead_id}/calls`: Get all calls associated with a lead (to be implemented)
+- `GET /leads/{lead_id}/appointments`: Get all appointments for a lead (to be implemented)
 
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase. 
 Common issues:
 - Validation errors for required fields in `app/schemas/leads/create.py`
 - Filter combination errors in `app/routes/leads/endpoints.py`
@@ -95,6 +96,7 @@ Located at `app/routes/calls/`:
 - `GET /calls/upcoming`: Get upcoming scheduled calls
 - `POST /calls/{call_id}/transcript`: Upload a call transcript
 
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase. 
 Common issues:
 - Status transition validation in `app/routes/calls/endpoints.py`
 - Scheduling conflicts in `app/routes/calls/scheduling.py`
@@ -103,7 +105,7 @@ Common issues:
 ### Appointment Management API
 
 Located at `app/routes/appointments/`:
-
+(All of them are yet to be implemented)
 #### Base Endpoints
 - `GET /appointments`: List all appointments
 - `POST /appointments`: Create a new appointment
@@ -118,6 +120,7 @@ Located at `app/routes/appointments/`:
 - `PUT /appointments/{appointment_id}/status`: Update appointment status
 - `GET /appointments/analytics`: Get appointment conversion metrics
 
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase. 
 Common issues:
 - Double-booking validation in `app/routes/appointments/endpoints.py`
 - Timezone handling in `app/routes/appointments/availability.py`
@@ -127,6 +130,7 @@ Common issues:
 
 Located at `app/routes/knowledge/`:
 
+(All of them are yet to be implemented)
 #### Base Endpoints
 - `GET /knowledge`: List all knowledge base entries
 - `POST /knowledge`: Create a knowledge base entry
@@ -139,6 +143,8 @@ Located at `app/routes/knowledge/`:
 - `POST /knowledge/categories`: Create a new category
 - `GET /knowledge/categories`: List all categories
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase. 
 Common issues:
 - Content format validation in `app/routes/knowledge/endpoints.py`
 - Search query formatting in `app/routes/knowledge/search.py`
@@ -148,6 +154,7 @@ Common issues:
 
 Located at `app/routes/analytics/`:
 
+(All of them are yet to be implemented)
 #### Dashboard Endpoints
 - `GET /analytics/overview`: Get system-wide metrics
 - `GET /analytics/leads`: Get lead conversion analytics
@@ -159,6 +166,8 @@ Located at `app/routes/analytics/`:
 - `GET /analytics/reports/{report_id}`: Get a generated report
 - `GET /analytics/export`: Export data in various formats
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase.
 Common issues:
 - Calculation errors in metric aggregation
 - Performance with large date ranges
@@ -167,7 +176,7 @@ Common issues:
 ### Voice Agent API
 
 Located at `app/routes/voice_agent/`:
-
+(All of them are yet to be implemented)
 #### Configuration Endpoints
 - `GET /voice-agent/config`: Get voice agent configuration
 - `PUT /voice-agent/config`: Update voice agent settings
@@ -180,6 +189,8 @@ Located at `app/routes/voice_agent/`:
 - `PUT /voice-agent/calls/{call_id}/interrupt`: Interrupt an ongoing call
 - `POST /voice-agent/script`: Generate or update call script
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase.
 Common issues:
 - Retell API integration in `app/routes/voice_agent/calls.py`
 - Voice parameter validation in `app/routes/voice_agent/configuration.py`
