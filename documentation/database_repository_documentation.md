@@ -1200,6 +1200,401 @@ def get_leads_by_status(self, statuses: List[str], tenant_id: UUID):
     ).all()
 ```
 
+## Repository Lifecycle Management
+
+### Connection Pooling
+
+The database layer implements connection pooling for optimal performance:
+
+```python
+class DatabasePool:
+    """Manages SQLAlchemy connection pools for efficient database access."""
+    
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls) -> 'DatabasePool':
+        """Get singleton instance."""
+        if cls._instance is None:
+            cls._instance = DatabasePool()
+        return cls._instance
+    
+    def __init__(self):
+        """Initialize connection pools."""
+        self.engine = create_engine(
+            settings.DATABASE_URL,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
+            pool_recycle=settings.DB_POOL_RECYCLE
+        )
+        self.session_factory = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=self.engine
+        )
+        
+    def get_session(self) -> Session:
+        """Get a new database session from the pool."""
+        return self.session_factory()
+```
+
+Common issues:
+- Connection pool exhaustion during traffic spikes
+- Connections not properly returned to the pool
+- Pool sizing misconfiguration
+
+### Session Management
+
+Sessions are managed through dependency injection and context managers:
+
+```python
+def get_db() -> Generator[Session, None, None]:
+    """Dependency for database sessions."""
+    db = DatabasePool.get_instance().get_session()
+    try:
+        yield db
+        db.commit()
+    except:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+```
+
+Common issues:
+- Session leaks in error scenarios
+- Long-running sessions blocking pool capacity
+- Missing explicit commits or rollbacks
+
+### Repository Initialization
+
+Repositories are typically initialized with database sessions:
+
+```python
+class LeadServiceFactory:
+    @staticmethod
+    def create(db_session: Session) -> ILeadService:
+        # Initialize repositories with session
+        lead_repository = LeadRepository(db_session)
+        
+        # Create service with repository
+        return LeadService(lead_repository)
+```
+
+Common issues:
+- Using different sessions for related repositories
+- Repository initialization outside transaction boundaries
+- Missing session cleanup
+
+## Repository Factory Pattern
+
+The repository layer implements factories to manage repository creation and dependencies:
+
+```python
+class RepositoryFactory:
+    """Factory for creating repository instances with proper dependencies."""
+    
+    @staticmethod
+    def create_lead_repository(db_session: Session) -> ILeadRepository:
+        """Create a LeadRepository instance."""
+        # Choose implementation type based on configuration
+        if settings.USE_CACHED_REPOSITORIES:
+            return CachedLeadRepository(db_session)
+        return LeadRepository(db_session)
+    
+    @staticmethod
+    def create_call_repository(db_session: Session) -> ICallRepository:
+        """Create a CallRepository instance."""
+        if settings.USE_CACHED_REPOSITORIES:
+            return CachedCallRepository(db_session)
+        return CallRepository(db_session)
+        
+    # Additional factory methods for other repositories
+```
+
+Common issues:
+- Inconsistent implementation selection
+- Missing repository type validation
+- Repository configuration gaps
+
+### Repository Registration
+
+For dependency injection systems, repositories can be registered:
+
+```python
+def register_repositories(container):
+    """Register repositories with the dependency injection container."""
+    container.register(ILeadRepository, 
+                      lambda c: RepositoryFactory.create_lead_repository(c.resolve(Session)))
+    container.register(ICallRepository, 
+                      lambda c: RepositoryFactory.create_call_repository(c.resolve(Session)))
+    # Register other repositories
+```
+
+Common issues:
+- Circular dependencies between repositories
+- Inconsistent registration patterns
+- Missing repository registrations
+
+## Cache Invalidation Strategies
+
+The repository layer implements cache invalidation at multiple levels:
+
+### Key-based Invalidation
+
+Cache keys are carefully designed for targeted invalidation:
+
+```python
+def get_lead_conversion_stats(self, tenant_id: UUID, start_date: date, end_date: date) -> Dict[str, int]:
+    """Get lead conversion statistics with caching."""
+    # Generate cache key with all parameters
+    cache_key = f"lead:stats:{tenant_id}:{start_date}:{end_date}"
+    
+    # Try to get from cache
+    cached_result = self.cache.get(cache_key)
+    if cached_result:
+        return cached_result
+    
+    # If not in cache, query database
+    results = self.db.query(
+        Lead.status,
+        func.count(Lead.id).label('count')
+    ).filter(
+        Lead.gym_id == tenant_id,
+        Lead.created_at >= start_date,
+        Lead.created_at <= end_date
+    ).group_by(
+        Lead.status
+    ).all()
+    
+    # Process results
+    stats = {status: 0 for status in ["new", "contacted", "qualified", "converted", "lost"]}
+    for status, count in results:
+        stats[status] = count
+    
+    # Store in cache
+    self.cache.set(cache_key, stats, ttl=3600)  # 1 hour TTL
+    
+    return stats
+```
+
+### Pattern-based Invalidation
+
+When data changes affect multiple cached items, pattern invalidation is used:
+
+```python
+def create(self, data: Dict[str, Any], tenant_id: Optional[UUID] = None) -> Lead:
+    """Create a lead and invalidate related caches."""
+    # Create lead
+    entity = super().create(data, tenant_id)
+    
+    # Invalidate all lead statistics caches for this tenant
+    self.cache.delete_pattern(f"lead:stats:{tenant_id}:*")
+    
+    # Invalidate prioritized leads cache
+    self.cache.delete(f"lead:prioritized:{tenant_id}")
+    
+    return entity
+```
+
+### Dependent Cache Invalidation
+
+For complex relationships, cascading invalidation is implemented:
+
+```python
+def update_lead_status(self, lead_id: UUID, status: str, tenant_id: UUID) -> Optional[Lead]:
+    """Update lead status and invalidate dependent caches."""
+    # Update lead
+    lead = super().update(lead_id, {"status": status}, tenant_id)
+    if not lead:
+        return None
+    
+    # Invalidate lead cache
+    self.cache.delete(f"lead:{lead_id}")
+    
+    # Invalidate dependent caches
+    self.cache.delete_pattern(f"lead:stats:{tenant_id}:*")  # Lead statistics
+    self.cache.delete(f"lead:prioritized:{tenant_id}")      # Prioritized leads
+    
+    # Invalidate related entity caches
+    if lead.calls:
+        for call in lead.calls:
+            self.cache.delete(f"call:{call.id}")
+    
+    return lead
+```
+
+Common issues:
+- Over-invalidation causing cache thrashing
+- Under-invalidation leading to stale data
+- Complex invalidation patterns hard to maintain
+
+## Data Migration and Versioning
+
+### Alembic Integration
+
+The repository layer interacts with Alembic for database migrations:
+
+```python
+# In alembic/env.py
+from backend.db.models.base import Base
+from backend.db.models import *  # Import all models
+
+# Register models with Alembic
+target_metadata = Base.metadata
+```
+
+### Model Versioning Strategies
+
+For handling model changes:
+
+```python
+class LeadV2(BaseModel):
+    """New version of Lead model with additional fields."""
+    __tablename__ = "lead"
+    
+    # Original fields
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    gym_id = Column(UUID(as_uuid=True), ForeignKey("gym.id", ondelete="CASCADE"), nullable=False, index=True)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    
+    # New fields
+    engagement_score = Column(Integer, nullable=True)
+    last_interaction = Column(DateTime, nullable=True)
+    
+    # Handle legacy records
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if self.engagement_score is None:
+            # Apply default calculation for legacy records
+            self.engagement_score = 0
+```
+
+### Migration Best Practices
+
+Guidelines for safe database migrations:
+1. **Run automated tests** before and after migrations
+2. **Use transactions** to make migrations atomic
+3. **Implement rollback mechanisms** for failed migrations
+4. **Perform on non-peak hours** to minimize impact
+5. **Test migrations in staging** before production
+
+Common migration issues:
+- Data corruption during schema changes
+- Performance impacts during large migrations
+- Application compatibility with schema changes
+
+## Monitoring and Instrumentation
+
+The repository layer includes monitoring for performance and diagnostics:
+
+### Query Timing
+
+```python
+def list(self, 
+         tenant_id: Optional[UUID] = None, 
+         skip: int = 0, 
+         limit: int = 100,
+         filters: Optional[Dict[str, Any]] = None,
+         sort_by: Optional[str] = None,
+         sort_dir: Optional[str] = None) -> List[T]:
+    """List entities with performance monitoring."""
+    # Start timing
+    start_time = time.time()
+    
+    # Build query
+    query = self.db.query(self.model_class)
+    
+    # Apply filters and execute
+    # ... existing implementation ...
+    
+    # Record query time
+    query_time = time.time() - start_time
+    logger.debug(f"Repository query executed in {query_time:.4f}s: {self.model_class.__name__}.list")
+    
+    # Record metrics if query time exceeds threshold
+    if query_time > settings.SLOW_QUERY_THRESHOLD:
+        metrics.record_slow_query(
+            model=self.model_class.__name__,
+            method="list",
+            parameters={"tenant_id": tenant_id, "filters": filters},
+            duration=query_time
+        )
+    
+    return result
+```
+
+### Cache Effectiveness
+
+```python
+def get_by_id(self, entity_id: UUID, tenant_id: Optional[UUID] = None) -> Optional[T]:
+    """Get entity by ID with cache metrics."""
+    cache_key = f"{self.model_class.__name__}:{entity_id}"
+    
+    # Attempt to get from cache
+    cached = self.cache.get(cache_key)
+    if cached:
+        metrics.increment("repository.cache.hit", tags=[self.model_class.__name__])
+        return cached
+    
+    # Cache miss, query database
+    metrics.increment("repository.cache.miss", tags=[self.model_class.__name__])
+    
+    # Execute query
+    # ... existing implementation ...
+    
+    # Update cache
+    if entity:
+        self.cache.set(cache_key, entity, ttl=settings.ENTITY_CACHE_TTL)
+    
+    return entity
+```
+
+### Health Checks
+
+```python
+def perform_health_check(self) -> Dict[str, Any]:
+    """Check database health and performance."""
+    results = {
+        "status": "healthy",
+        "issues": []
+    }
+    
+    try:
+        # Check connection
+        start_time = time.time()
+        self.db.execute(text("SELECT 1"))
+        connection_time = time.time() - start_time
+        
+        results["connection_time_ms"] = int(connection_time * 1000)
+        
+        # Check pool usage
+        pool_info = inspect(self.db.get_bind()).pool.status()
+        results["pool_status"] = {
+            "checkedout": pool_info["checkedout"],
+            "checkedin": pool_info["checkedin"],
+            "size": pool_info["pool_size"],
+            "overflow": pool_info["overflow"],
+        }
+        
+        # Set warning if pool usage is high
+        if pool_info["checkedout"] > pool_info["pool_size"] * 0.8:
+            results["issues"].append("High connection pool usage")
+            
+    except Exception as e:
+        results["status"] = "unhealthy"
+        results["issues"].append(str(e))
+    
+    return results
+```
+
+Common monitoring issues:
+- Missing instrumentation for critical queries
+- Excessive logging affecting performance
+- Inadequate alerting for database issues
+
 ## Conclusion
 
 The Database Repository Layer in the Reps AI Dashboard Backend provides a clean abstraction for data access with strong multi-tenant isolation, performance optimization, and business rule enforcement. By following the Repository Pattern, it simplifies database interactions while maintaining flexibility for different query patterns and optimizations.
