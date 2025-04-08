@@ -1,5 +1,26 @@
 # API Layer Documentation
 
+## Table of Contents
+1. [Overview](#overview)
+2. [Structure](#structure)
+3. [Authentication](#authentication)
+   - [JWT Authentication](#jwt-authentication)
+   - [Auth Endpoints](#auth-endpoints)
+4. [API Endpoints](#api-endpoints)
+   - [Lead Management API](#lead-management-api)
+   - [Call Management API](#call-management-api)
+   - [Appointment Management API](#appointment-management-api)
+   - [Knowledge Base API](#knowledge-base-api)
+   - [Analytics API](#analytics-api)
+   - [Voice Agent API](#voice-agent-api)
+   - [Settings API](#settings-api)
+5. [Data Validation](#data-validation)
+   - [Common Schema Components](#common-schema-components)
+6. [Middleware](#middleware)
+7. [Error Handling](#error-handling)
+8. [API Documentation](#api-documentation)
+9. [Performance Considerations](#performance-considerations)
+
 ## Overview
 
 The API Layer is the entry point for client applications to interact with the Reps AI Dashboard Backend. Built using FastAPI, this layer handles HTTP requests, validates input data, manages authentication, and routes requests to appropriate service components.
@@ -199,6 +220,7 @@ Common issues:
 ### Settings API
 
 Located at `app/routes/settings/`:
+(All of them are yet to be implemented)
 
 - `GET /settings/gym`: Get gym-specific settings
 - `PUT /settings/gym`: Update gym settings
@@ -207,6 +229,8 @@ Located at `app/routes/settings/`:
 - `GET /settings/system`: Get system settings (admin only)
 - `PUT /settings/system`: Update system settings (admin only)
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase.
 Common issues:
 - Default value conflicts in `app/routes/settings/gym_settings.py`
 - Serialization of complex settings objects
@@ -225,6 +249,8 @@ All API input and output is validated using Pydantic models defined in `app/sche
 - **Filtering**: `app/schemas/common/filters.py` - Standardizes query filters
 - **Sorting**: `app/schemas/common/sorting.py` - Manages result ordering
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase.
 Common issues:
 - Field validation regex patterns in request schemas
 - Missing relationships in response models
@@ -239,6 +265,8 @@ The API layer includes several middleware components:
 - **HTTP Cache Middleware**: Caches read-heavy endpoints
 - **Tenant Context Middleware**: Ensures proper multi-tenant isolation
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase.
 Common issues:
 - Cache key generation in HTTP cache middleware
 - CORS configuration for production environments
@@ -252,6 +280,8 @@ The API implements standardized error handling:
 - **Validation Errors**: Detailed field-level validation feedback
 - **Global Exception Handler**: Catches and formats unexpected errors
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase.
 Common issues:
 - Missing error translations
 - Inconsistent error formatting
@@ -271,6 +301,8 @@ The API is documented using:
 - **Pagination**: All list endpoints support pagination
 - **Async Handlers**: Long-running operations handled asynchronously
 
+
+The below "Common issues" sections acts as a proactive approach to troubleshooting and not something that exists in the codebase.
 Common issues:
 - Oversized response payloads
 - Missing cache invalidation

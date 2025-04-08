@@ -1,5 +1,37 @@
 # Reps AI Dashboard Backend - Repository Documentation
 
+## Table of Contents
+1. [Introduction](#1-introduction)
+2. [Repository Structure](#2-repository-structure)
+3. [System Overview](#3-system-overview)
+   - [Purpose and Functionality](#31-purpose-and-functionality)
+   - [Core Technologies](#32-core-technologies)
+4. [Architecture](#4-architecture)
+   - [High-Level Architecture](#41-high-level-architecture)
+   - [Multi-tenant Design](#42-multi-tenant-design)
+5. [Key Features](#5-key-features)
+   - [Multi-tenant Isolation](#51-multi-tenant-isolation)
+   - [AI Voice Agent Integration](#52-ai-voice-agent-integration)
+   - [Performance Optimization](#53-performance-optimization)
+   - [Security Features](#54-security-features)
+6. [Getting Started](#6-getting-started)
+   - [Local Development Setup](#61-local-development-setup)
+   - [Environment Variables](#62-environment-variables)
+   - [Database Migrations](#63-database-migrations)
+7. [Development Workflow](#7-development-workflow)
+   - [Code Organization](#71-code-organization)
+   - [Testing](#72-testing)
+   - [Common Development Tasks](#73-common-development-tasks)
+8. [Deployment](#8-deployment)
+   - [Production Deployment](#81-production-deployment)
+   - [Database Management](#82-database-management)
+   - [Monitoring and Logging](#83-monitoring-and-logging)
+9. [Troubleshooting](#9-troubleshooting)
+   - [Authentication Issues](#91-authentication-issues)
+   - [Database Connection Issues](#92-database-connection-issues)
+   - [Performance Issues](#93-performance-issues)
+10. [Conclusion](#10-conclusion)
+
 ## 1. Introduction
 
 The Reps AI Dashboard Backend is a sophisticated FastAPI application designed to power an AI Voice Agent system specifically tailored for fitness gyms. This backend serves as the central hub for managing gym operations, including lead management, automated call handling, appointment scheduling, and analytics tracking.

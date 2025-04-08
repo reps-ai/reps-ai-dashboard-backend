@@ -1,5 +1,29 @@
 # Service Layer Documentation
 
+## Table of Contents
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Core Service Components](#core-service-components)
+   - [Lead Service](#lead-service)
+   - [Call Service](#call-service)
+   - [Appointment Service](#appointment-service)
+   - [Analytics Service](#analytics-service)
+   - [Voice Agent Service](#voice-agent-service)
+   - [Knowledge Base Service](#knowledge-base-service)
+4. [Service Patterns](#service-patterns)
+   - [Interface Design](#interface-design)
+   - [Factory Pattern](#factory-pattern)
+   - [Implementation Structure](#implementation-structure)
+5. [Caching Strategies](#caching-strategies)
+   - [Method-Level Caching](#method-level-caching)
+   - [Result Aggregation Caching](#result-aggregation-caching)
+6. [Transactions](#transactions)
+7. [Error Handling](#error-handling)
+8. [Service Integration](#service-integration)
+9. [Background Task Integration](#background-task-integration)
+10. [Performance Considerations](#performance-considerations)
+11. [Testing Approach](#testing-approach)
+
 ## Overview
 
 The Service Layer is the heart of the Reps AI Dashboard Backend, implementing the core business logic that powers the application. It sits between the API layer and the repository layer, orchestrating complex operations, enforcing business rules, and coordinating between different components of the system.

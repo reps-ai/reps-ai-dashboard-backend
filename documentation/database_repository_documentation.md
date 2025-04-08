@@ -1,5 +1,60 @@
 # Database Repository Layer Documentation
 
+## Table of Contents
+1. [Overview](#overview)
+2. [Architecture](#architecture)
+3. [Database Models](#database-models)
+   - [Core Model Structure](#core-model-structure)
+   - [Multi-tenant Design](#multi-tenant-design)
+   - [Key Database Models](#key-database-models)
+     - [User and Authentication Models](#user-and-authentication-models)
+     - [Gym and Branch Models](#gym-and-branch-models)
+     - [Lead Models](#lead-models)
+     - [Call Models](#call-models)
+     - [Appointment Models](#appointment-models)
+4. [Repository Pattern Implementation](#repository-pattern-implementation)
+   - [Base Repository](#base-repository)
+   - [Specialized Repositories](#specialized-repositories)
+     - [Lead Repository](#lead-repository)
+     - [Call Repository](#call-repository)
+     - [Appointment Repository](#appointment-repository)
+5. [Query Patterns](#query-patterns)
+   - [Tenant Isolation](#tenant-isolation)
+   - [Eager Loading](#eager-loading)
+   - [Pagination, Filtering, and Sorting](#pagination-filtering-and-sorting)
+6. [Caching Integration](#caching-integration)
+7. [Transaction Management](#transaction-management)
+8. [Raw SQL Queries](#raw-sql-queries)
+9. [Performance Optimization](#performance-optimization)
+   - [Indexing](#indexing)
+   - [Query Optimization](#query-optimization)
+   - [Result Caching](#result-caching)
+10. [Repository Lifecycle Management](#repository-lifecycle-management)
+    - [Connection Pooling](#connection-pooling)
+    - [Session Management](#session-management)
+    - [Repository Initialization](#repository-initialization)
+11. [Repository Factory Pattern](#repository-factory-pattern)
+    - [Repository Registration](#repository-registration)
+12. [Cache Invalidation Strategies](#cache-invalidation-strategies)
+    - [Key-based Invalidation](#key-based-invalidation)
+    - [Pattern-based Invalidation](#pattern-based-invalidation)
+    - [Dependent Cache Invalidation](#dependent-cache-invalidation)
+13. [Data Migration and Versioning](#data-migration-and-versioning)
+    - [Alembic Integration](#alembic-integration)
+    - [Model Versioning Strategies](#model-versioning-strategies)
+    - [Migration Best Practices](#migration-best-practices)
+14. [Monitoring and Instrumentation](#monitoring-and-instrumentation)
+    - [Query Timing](#query-timing)
+    - [Cache Effectiveness](#cache-effectiveness)
+    - [Health Checks](#health-checks)
+15. [Testing Approach](#testing-approach)
+16. [Common Repository Issues](#common-repository-issues)
+    - [N+1 Query Problem](#1-n1-query-problem)
+    - [Transaction Management Issues](#2-transaction-management-issues)
+    - [Missing Tenant Isolation](#3-missing-tenant-isolation)
+    - [Inefficient Query Patterns](#4-inefficient-query-patterns)
+17. [Conclusion](#conclusion)
+
 ## Overview
 
 The Database Repository Layer in the Reps AI Dashboard Backend provides a clean abstraction for data access and persistence. This layer serves as the interface between the business logic in the Service Layer and the database, implementing data access patterns, query optimization, and ensuring data integrity.
@@ -643,6 +698,7 @@ Common issues:
 
 Located at `backend/db/repositories/appointment/appointment_repository.py`:
 
+(Future application after completion of MVP)
 ```python
 class AppointmentRepository(BaseRepository[Appointment]):
     """
