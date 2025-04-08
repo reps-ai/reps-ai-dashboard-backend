@@ -16,11 +16,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from backend.db.connections.database import get_db_session
 from sqlalchemy import text
 
+# API authentication
+BEARER_TOKEN = os.environ.get("BEARER_TOKEN")
+if not BEARER_TOKEN:
+    print("⚠️ Warning: BEARER_TOKEN environment variable not set.")
+    print("Please set it with: export BEARER_TOKEN='Bearer your-token-here'")
+    sys.exit(1)
+
 # Base URL for the API
 BASE_URL = "https://reps-ai-backend.rthulabs.com/api"
-
-# API authentication
-BEARER_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYzM4ZTFlOTctMGE1MC00ZTA2LWI5ZDktZTg0YWY3ZGEzNThhIiwiYnJhbmNoX2lkIjoiZTNiZmYyOWItYTIwNC00NmY1LWJlNGQtZjE0YmYzZTY5YzQxIiwiZ3ltX2lkIjoiY2ZkMzdhOTctMTQ2MS00MzkwLTk0YzAtNjJmZDgxMjgzMzMwIiwic3ViIjoiaGFoYUBnbWlsLmNvbSIsImV4cCI6MTc0Mzg5MTI5NX0.YBkRcHo2TC5o53OqcQvdx0pQRJE7cJGd2hPXMPKAB-w"
 
 # Branch ID to use for leads
 TARGET_BRANCH_ID = "e3bff29b-a204-46f5-be4d-f14bf3e69c41"

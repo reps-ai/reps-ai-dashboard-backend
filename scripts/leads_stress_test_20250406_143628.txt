@@ -1,0 +1,20 @@
+Leads API Stress Test Results
+===========================
+
+Test Date: 2025-04-06T14:36:28.991655
+Target API: https://reps-ai-backend.rthulabs.com/api
+
+All Leads Endpoint:
+  Total Requests: 2462
+  Successful: 2455 (99.7%)
+  Failed: 7 (0.3%)
+
+Lead by ID Endpoint:
+  Total Requests: 3533
+  Successful: 3525 (99.8%)
+  Failed: 8 (0.2%)
+
+Timeouts: 5
+Total Test Duration: 119.70 seconds
+Requests Per Second: 50.08
+Concurrency Level: 1000
