@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field, validator, EmailStr
+from pydantic import field_validator, ConfigDict, BaseModel, Field, EmailStr
 from app.schemas.leads.base import LeadBase
 from app.schemas.common.lead_types import Tag, AssignedStaff
 from app.schemas.common.activity import Call, Appointment
@@ -15,42 +15,43 @@ class LeadResponse(LeadBase):
     last_called: Optional[str] = Field(
         None, 
         description="ISO timestamp of when the lead was last called",
-        example="2025-03-20T15:30:00Z"
+        examples=["2025-03-20T15:30:00Z"]
     )
     created_at: str = Field(
         ..., 
         description="Creation timestamp in ISO format",
-        example="2025-03-15T10:00:00Z"
+        examples=["2025-03-15T10:00:00Z"]
     )
     updated_at: str = Field(
         ..., 
         description="Last update timestamp in ISO format",
-        example="2025-03-20T15:30:00Z"
+        examples=["2025-03-20T15:30:00Z"]
     )
     score: float = Field(
         ..., 
         ge=0.0, 
         le=1.0, 
         description="Lead score between 0 and 1",
-        example=0.85
+        examples=[0.85]
     )
     call_count: int = Field(
         ..., 
         ge=0, 
         description="Number of calls made to or from this lead",
-        example=3
+        examples=[3]
     )
     appointment_date: Optional[str] = Field(
         None, 
         description="Date of the next appointment in ISO format",
-        example="2025-03-25T14:00:00Z"
+        examples=["2025-03-25T14:00:00Z"]
     )
     tags: List[Tag] = Field(
         default_factory=list, 
         description="List of tags associated with this lead"
     )
     
-    @validator('last_called', 'created_at', 'updated_at', 'appointment_date')
+    @field_validator('last_called', 'created_at', 'updated_at', 'appointment_date')
+    @classmethod
     def validate_dates(cls, v):
         if v is not None:
             try:
@@ -60,35 +61,34 @@ class LeadResponse(LeadBase):
                 raise ValueError('Date must be a valid ISO datetime format')
         return v
         
-    @validator('score')
+    @field_validator('score')
+    @classmethod
     def validate_score(cls, v):
         if v < 0.0 or v > 1.0:
             raise ValueError('Score must be between 0 and 1')
         return v
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "id": "lead-123",
-                "first_name": "John",
-                "last_name": "Doe",
-                "phone": "+1234567890",
-                "email": "john.doe@example.com",
-                "status": "qualified",
-                "branch_id": "branch-456",
-                "branch_name": "Downtown Fitness",
-                "source": "website",
-                "interest": "Personal Training",
-                "created_at": "2025-03-15T10:00:00Z",
-                "updated_at": "2025-03-20T15:30:00Z",
-                "score": 0.85,
-                "call_count": 3,
-                "last_called": "2025-03-20T15:30:00Z",
-                "tags": [
-                    {"id": "tag-1", "name": "VIP", "color": "#FF5733"}
-                ]
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "lead-123",
+            "first_name": "John",
+            "last_name": "Doe",
+            "phone": "+1234567890",
+            "email": "john.doe@example.com",
+            "status": "qualified",
+            "branch_id": "branch-456",
+            "branch_name": "Downtown Fitness",
+            "source": "website",
+            "interest": "Personal Training",
+            "created_at": "2025-03-15T10:00:00Z",
+            "updated_at": "2025-03-20T15:30:00Z",
+            "score": 0.85,
+            "call_count": 3,
+            "last_called": "2025-03-20T15:30:00Z",
+            "tags": [
+                {"id": "tag-1", "name": "VIP", "color": "#FF5733"}
+            ]
         }
+    })
 
 class LeadDetailResponse(LeadResponse):
     assigned_to: Optional[AssignedStaff] = Field(

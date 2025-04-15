@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import field_validator, model_validator, ConfigDict, BaseModel, Field
 from app.schemas.common.call_types import CallDirection, CallStatus, CallOutcome, CallSentiment, TranscriptEntry
 import uuid
 
@@ -11,21 +11,20 @@ class LeadSummary(BaseModel):
     phone: str = Field(..., description="Phone number of the lead")
     email: Optional[str] = Field(None, description="Email address of the lead")
     
-    @validator('id', pre=True)
+    @field_validator('id', mode="before")
+    @classmethod
     def convert_id_to_str(cls, v):
         """Convert UUID or other types to string"""
         return str(v) if v is not None else None
-
-    class Config:
-        schema_extra = {
-            "example": {
-                "id": "lead-123",
-                "first_name": "John",
-                "last_name": "Doe",
-                "phone": "+1234567890",
-                "email": "john.doe@example.com"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "lead-123",
+            "first_name": "John",
+            "last_name": "Doe",
+            "phone": "+1234567890",
+            "email": "john.doe@example.com"
         }
+    })
 
 class CallResponse(BaseModel):
     id: str = Field(..., description="Unique identifier for the call")
@@ -46,12 +45,14 @@ class CallResponse(BaseModel):
     campaign_name: Optional[str] = Field(None, description="Name of the campaign")
     
     # Add validators to handle type conversions
-    @validator('id', 'lead_id', 'campaign_id', pre=True)
+    @field_validator('id', 'lead_id', 'campaign_id', mode="before")
+    @classmethod
     def convert_ids_to_str(cls, v):
         """Convert UUID or other types to string"""
         return str(v) if v is not None else None
     
-    @validator('start_time', 'end_time', 'created_at', pre=True)
+    @field_validator('start_time', 'end_time', 'created_at', mode="before")
+    @classmethod
     def convert_datetime_to_str(cls, v):
         """Handle datetime conversion to ISO format string"""
         if v is None:
@@ -63,7 +64,8 @@ class CallResponse(BaseModel):
         # For any other type, convert to string
         return str(v)
     
-    @validator('direction')
+    @field_validator('direction')
+    @classmethod
     def validate_direction(cls, v):
         if not v:  # Handle None or empty string
             return "outbound"  # Default value
@@ -73,7 +75,8 @@ class CallResponse(BaseModel):
             # More permissive - if not a valid enum, just return as is
             return v
     
-    @validator('status')
+    @field_validator('status')
+    @classmethod
     def validate_status(cls, v):
         if not v:  # Handle None or empty string
             return "scheduled"  # Default value
@@ -83,7 +86,8 @@ class CallResponse(BaseModel):
             # More permissive - if not a valid enum, just return as is
             return v
     
-    @validator('outcome')
+    @field_validator('outcome')
+    @classmethod
     def validate_outcome(cls, v):
         if v is None:
             return None
@@ -93,7 +97,8 @@ class CallResponse(BaseModel):
             # More permissive - if not a valid enum, just return as is
             return v
     
-    @validator('sentiment')
+    @field_validator('sentiment')
+    @classmethod
     def validate_sentiment(cls, v):
         if v is None:
             return None
@@ -104,7 +109,8 @@ class CallResponse(BaseModel):
             return v
     
     # Add a root validator to handle missing fields or inconsistent data
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def ensure_required_fields(cls, values):
         """Ensure all required fields have values, even if they're not in the input."""
         # Make sure 'lead' is populated
@@ -113,31 +119,28 @@ class CallResponse(BaseModel):
                 # Create a minimal lead object based on lead_id
                 values['lead'] = {'id': values['lead_id'], 'first_name': '', 'last_name': '', 'phone': ''}
         return values
-    
-    class Config:
-        use_enum_values = True
-        schema_extra = {
-            "example": {
-                "id": "call-123",
-                "lead_id": "lead-456",
-                "lead": {
-                    "id": "lead-456",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                    "phone": "+1234567890",
-                    "email": "john.doe@example.com"
-                },
-                "direction": "outbound",
-                "status": "completed",
-                "start_time": "2025-03-23T10:00:00Z",
-                "end_time": "2025-03-23T10:05:00Z",
-                "duration": 300,
-                "outcome": "appointment_booked",
-                "sentiment": "positive",
-                "summary": "Customer showed interest in premium membership and scheduled a visit",
-                "created_at": "2025-03-23T09:30:00Z"
-            }
+    model_config = ConfigDict(use_enum_values=True, json_schema_extra={
+        "example": {
+            "id": "call-123",
+            "lead_id": "lead-456",
+            "lead": {
+                "id": "lead-456",
+                "first_name": "John",
+                "last_name": "Doe",
+                "phone": "+1234567890",
+                "email": "john.doe@example.com"
+            },
+            "direction": "outbound",
+            "status": "completed",
+            "start_time": "2025-03-23T10:00:00Z",
+            "end_time": "2025-03-23T10:05:00Z",
+            "duration": 300,
+            "outcome": "appointment_booked",
+            "sentiment": "positive",
+            "summary": "Customer showed interest in premium membership and scheduled a visit",
+            "created_at": "2025-03-23T09:30:00Z"
         }
+    })
 
 class CallDetailResponse(CallResponse):
     transcript: Optional[List[TranscriptEntry]] = Field(
@@ -146,7 +149,8 @@ class CallDetailResponse(CallResponse):
     )
     metrics: Optional[Dict[str, float]] = Field(None, description="Call metrics and analysis")
     
-    @validator('transcript', pre=True)
+    @field_validator('transcript', mode="before")
+    @classmethod
     def validate_transcript(cls, v):
         """Ensure transcript is either None or a list"""
         if v is None:
@@ -154,39 +158,37 @@ class CallDetailResponse(CallResponse):
         if not isinstance(v, list):
             return None  # Return None for non-list values
         return v
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "id": "call-123",
-                "lead_id": "lead-456",
-                "lead": {
-                    "id": "lead-456",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                    "phone": "+1234567890",
-                    "email": "john.doe@example.com"
-                },
-                "direction": "outbound",
-                "status": "completed",
-                "start_time": "2025-03-23T10:00:00Z",
-                "end_time": "2025-03-23T10:05:00Z",
-                "duration": 300,
-                "outcome": "appointment_booked",
-                "sentiment": "positive",
-                "summary": "Customer showed interest in premium membership and scheduled a visit",
-                "created_at": "2025-03-23T09:30:00Z",
-                "transcript": [
-                    {"speaker": "agent", "text": "Hello, this is Fitness Gym calling. How are you today?", "timestamp": 0.0},
-                    {"speaker": "customer", "text": "I'm good, thanks for asking.", "timestamp": 3.5}
-                ],
-                "metrics": {
-                    "talk_ratio": 0.6,
-                    "interruptions": 0,
-                    "talk_speed": 145.2
-                }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "call-123",
+            "lead_id": "lead-456",
+            "lead": {
+                "id": "lead-456",
+                "first_name": "John",
+                "last_name": "Doe",
+                "phone": "+1234567890",
+                "email": "john.doe@example.com"
+            },
+            "direction": "outbound",
+            "status": "completed",
+            "start_time": "2025-03-23T10:00:00Z",
+            "end_time": "2025-03-23T10:05:00Z",
+            "duration": 300,
+            "outcome": "appointment_booked",
+            "sentiment": "positive",
+            "summary": "Customer showed interest in premium membership and scheduled a visit",
+            "created_at": "2025-03-23T09:30:00Z",
+            "transcript": [
+                {"speaker": "agent", "text": "Hello, this is Fitness Gym calling. How are you today?", "timestamp": 0.0},
+                {"speaker": "customer", "text": "I'm good, thanks for asking.", "timestamp": 3.5}
+            ],
+            "metrics": {
+                "talk_ratio": 0.6,
+                "interruptions": 0,
+                "talk_speed": 145.2
             }
         }
+    })
 
 class CallTranscriptResponse(BaseModel):
     id: str = Field(..., description="Unique identifier for the call transcript")
@@ -211,7 +213,8 @@ class PaginationInfo(BaseModel):
     page_size: int = Field(..., ge=1, description="Number of calls per page")
     pages: int = Field(1, ge=1, description="Total number of pages available")  # Set default to 1
     
-    @validator('pages', pre=True)
+    @field_validator('pages', mode="before")
+    @classmethod
     def ensure_min_pages(cls, v):
         """Ensure pages is at least 1 even when there are no results"""
         if v is None or v < 1:
@@ -219,7 +222,8 @@ class PaginationInfo(BaseModel):
         return v
     
     # Add a root validator to ensure consistency between total and pages
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def calculate_pages_if_missing(cls, values):
         """Calculate pages from total and page_size if not provided"""
         if 'total' in values and 'page_size' in values and values['page_size'] > 0:
@@ -236,18 +240,16 @@ class CallListResponse(BaseModel):
         description="List of call data. May be empty if no calls match the filter criteria."
     )
     pagination: PaginationInfo = Field(..., description="Pagination information")
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "calls": [
-                    # Example call data
-                ],
-                "pagination": {
-                    "total": 0,
-                    "page": 1,
-                    "page_size": 10,
-                    "pages": 1
-                }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "calls": [
+                # Example call data
+            ],
+            "pagination": {
+                "total": 0,
+                "page": 1,
+                "page_size": 10,
+                "pages": 1
             }
         }
+    })
