@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import field_validator, ConfigDict, BaseModel, Field
 from app.schemas.appointments.base import AppointmentBase
 from app.schemas.common.appointment_types import TimeSlot
 
@@ -12,12 +12,12 @@ class UserSummary(BaseModel):
     first_name: str = Field(
         ..., 
         description="First name of the user",
-        example="John"
+        examples=["John"]
     )
     last_name: str = Field(
         ..., 
         description="Last name of the user",
-        example="Doe"
+        examples=["Doe"]
     )
 
 class LeadSummary(BaseModel):
@@ -28,22 +28,22 @@ class LeadSummary(BaseModel):
     first_name: str = Field(
         ..., 
         description="First name of the lead",
-        example="John"
+        examples=["John"]
     )
     last_name: str = Field(
         ..., 
         description="Last name of the lead",
-        example="Doe"
+        examples=["Doe"]
     )
     phone: str = Field(
         ..., 
         description="Phone number of the lead",
-        example="+1234567890"
+        examples=["+1234567890"]
     )
     email: Optional[str] = Field(
         None, 
         description="Email address of the lead",
-        example="john.doe@example.com"
+        examples=["john.doe@example.com"]
     )
     status: Optional[str] = Field(
         None, 
@@ -62,14 +62,15 @@ class AppointmentResponse(AppointmentBase):
     created_at: str = Field(
         ..., 
         description="Creation timestamp in ISO format",
-        example="2025-03-20T12:00:00Z"
+        examples=["2025-03-20T12:00:00Z"]
     )
     lead: LeadSummary = Field(
         ..., 
         description="Summary of the lead associated with the appointment"
     )
     
-    @validator('created_at')
+    @field_validator('created_at')
+    @classmethod
     def validate_timestamps(cls, v):
         try:
             # Parse the datetime to validate format
@@ -77,28 +78,26 @@ class AppointmentResponse(AppointmentBase):
         except ValueError:
             raise ValueError('Timestamp must be a valid ISO datetime format')
         return v
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "id": "appt-456",
-                "branch_name": "Main Branch",
-                "created_at": "2025-03-20T12:00:00Z",
-                "lead": {
-                    "id": "lead-123",
-                    "first_name": "John",
-                    "last_name": "Doe",
-                    "phone": "+1234567890",
-                    "email": "john.doe@example.com"
-                }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "appt-456",
+            "branch_name": "Main Branch",
+            "created_at": "2025-03-20T12:00:00Z",
+            "lead": {
+                "id": "lead-123",
+                "first_name": "John",
+                "last_name": "Doe",
+                "phone": "+1234567890",
+                "email": "john.doe@example.com"
             }
         }
+    })
 
 class AppointmentDetailResponse(AppointmentResponse):
     updated_at: str = Field(
         ..., 
         description="Last update timestamp in ISO format",
-        example="2025-03-20T15:30:00Z"
+        examples=["2025-03-20T15:30:00Z"]
     )
     created_by: UserSummary = Field(
         ..., 
@@ -109,7 +108,8 @@ class AppointmentDetailResponse(AppointmentResponse):
         description="Whether a reminder has been sent for the appointment"
     )
     
-    @validator('updated_at')
+    @field_validator('updated_at')
+    @classmethod
     def validate_updated_at(cls, v):
         try:
             # Parse the datetime to validate format
@@ -130,10 +130,11 @@ class AppointmentStatusResponse(BaseModel):
     updated_at: str = Field(
         ..., 
         description="Last update timestamp in ISO format",
-        example="2025-03-20T15:30:00Z"
+        examples=["2025-03-20T15:30:00Z"]
     )
     
-    @validator('updated_at')
+    @field_validator('updated_at')
+    @classmethod
     def validate_updated_at(cls, v):
         try:
             # Parse the datetime to validate format
@@ -156,7 +157,7 @@ class AvailabilityResponse(BaseModel):
     date: str = Field(
         ..., 
         description="Date of availability",
-        example="2025-03-25"
+        examples=["2025-03-25"]
     )
     available_slots: List[TimeSlot] = Field(
         ..., 

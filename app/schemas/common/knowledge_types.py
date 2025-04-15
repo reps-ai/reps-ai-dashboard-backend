@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field, validator, constr
+from pydantic import field_validator, StringConstraints, ConfigDict, BaseModel, Field
+from typing_extensions import Annotated
 
 class KnowledgeCategory(str, Enum):
     """Enum for knowledge categories
@@ -42,19 +43,20 @@ class CategoryModel(BaseModel):
     
     Used to represent category counts in the knowledge base
     """
-    category: constr(min_length=1) = Field(
+    category: Annotated[str, StringConstraints(min_length=1)] = Field(
         ...,
         description="Category name (either predefined or custom)",
-        example="membership"
+        examples=["membership"]
     )
     count: int = Field(
         ...,
         ge=0,
         description="Number of knowledge entries in this category",
-        example=15
+        examples=[15]
     )
     
-    @validator('category')
+    @field_validator('category')
+    @classmethod
     def validate_category(cls, v):
         try:
             return KnowledgeCategory(v).value
@@ -63,14 +65,12 @@ class CategoryModel(BaseModel):
             if not v or not v.strip():
                 raise ValueError("Category cannot be empty")
             return v
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "category": "membership",
-                "count": 15
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "category": "membership",
+            "count": 15
         }
+    })
 
 class KnowledgeStatistics(BaseModel):
     """Model for knowledge base statistics
@@ -81,7 +81,7 @@ class KnowledgeStatistics(BaseModel):
         ...,
         ge=0,
         description="Total number of knowledge entries",
-        example=120
+        examples=[120]
     )
     categories: List[CategoryModel] = Field(
         ...,
@@ -91,25 +91,23 @@ class KnowledgeStatistics(BaseModel):
         ...,
         ge=0,
         description="Number of unique knowledge sources",
-        example=8
+        examples=[8]
     )
     last_updated: Optional[str] = Field(
         None,
         description="ISO timestamp of the last knowledge base update",
-        example="2025-03-25T14:30:00Z"
+        examples=["2025-03-25T14:30:00Z"]
     )
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "total_entries": 120,
-                "categories": [
-                    {"category": "membership", "count": 45},
-                    {"category": "facilities", "count": 25},
-                    {"category": "pricing", "count": 20},
-                    {"category": "general", "count": 30}
-                ],
-                "sources": 8,
-                "last_updated": "2025-03-25T14:30:00Z"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "total_entries": 120,
+            "categories": [
+                {"category": "membership", "count": 45},
+                {"category": "facilities", "count": 25},
+                {"category": "pricing", "count": 20},
+                {"category": "general", "count": 30}
+            ],
+            "sources": 8,
+            "last_updated": "2025-03-25T14:30:00Z"
         }
+    })

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator, ValidationError
+from pydantic import field_validator, BaseModel, Field, ValidationError
 from enum import Enum
 from typing import List, Optional
 
@@ -14,7 +14,8 @@ class SampleModel(BaseModel):
     tag: Optional[str] = Field(None, description="Optional tag")
     enum_value: SampleEnum = Field(..., description="Enum value")
     
-    @validator('name')
+    @field_validator('name')
+    @classmethod
     def validate_name(cls, v):
         if v.lower() == 'test':
             raise ValueError('Name cannot be test')

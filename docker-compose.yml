@@ -1,6 +1,18 @@
-
-
 services:
+  # FastAPI application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+    container_name: reps-ai-backend
+
   # Redis service (message broker)
   redis:
     image: redis:7
