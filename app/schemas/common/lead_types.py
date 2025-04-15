@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel, Field, validator
+from pydantic import field_validator, ConfigDict, BaseModel, Field
 from typing import Optional, List
 
 class LeadStatus(str, Enum):
@@ -22,7 +22,8 @@ class Tag(BaseModel):
     name: str = Field(..., min_length=1, description="Name of the tag")
     color: str = Field(..., description="Color code for the tag (e.g., #RRGGBB)")
     
-    @validator('color')
+    @field_validator('color')
+    @classmethod
     def validate_color(cls, v):
         # Simplified color validation for robust testing
         if not v.startswith('#'):
@@ -36,26 +37,22 @@ class Tag(BaseModel):
         except ValueError:
             raise ValueError('Color must be a valid hex color code (e.g., #RRGGBB)')
         return v
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "id": "tag-123",
-                "name": "VIP",
-                "color": "#FF5733"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "tag-123",
+            "name": "VIP",
+            "color": "#FF5733"
         }
+    })
 
 class AssignedStaff(BaseModel):
     id: str = Field(..., min_length=1, description="Unique identifier for the staff member")
     first_name: str = Field(..., min_length=1, description="First name of the staff member")
     last_name: str = Field(..., min_length=1, description="Last name of the staff member")
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "id": "staff-123",
-                "first_name": "John",
-                "last_name": "Doe"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "staff-123",
+            "first_name": "John",
+            "last_name": "Doe"
         }
+    })

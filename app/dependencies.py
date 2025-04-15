@@ -26,7 +26,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False
 
 # User model expanded to include branch_id
 class User(BaseModel):
-    id: int
+    id: uuid.UUID
     email: str
     first_name: str
     last_name: str
@@ -64,7 +64,7 @@ ALGORITHM = "HS256"
 TESTING_MODE = os.environ.get("TESTING_MODE", "").lower() == "true"
 
 # Create mock objects for testing
-MOCK_USER_ID = 1
+MOCK_USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")  # Valid UUID
 MOCK_GYM_ID = uuid.UUID("facd154c-9be8-40fb-995f-27ea665d3a8b")  # Valid gym ID
 MOCK_BRANCH_ID = uuid.UUID("8d8808a4-22f8-4af3-aec4-bab5b44b1aa7")  # Valid branch ID
 

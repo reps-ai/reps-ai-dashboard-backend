@@ -35,7 +35,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 14400
 
 class TokenData:
     """Class to store the data extracted from a token."""
-    def __init__(self, user_id: Optional[int] = None, branch_id: Optional[uuid.UUID] = None, gym_id: Optional[uuid.UUID] = None):
+    def __init__(self, user_id: Optional[uuid.UUID] = None, branch_id: Optional[uuid.UUID] = None, gym_id: Optional[uuid.UUID] = None):
         self.user_id = user_id
         self.branch_id = branch_id
         self.gym_id = gym_id
@@ -90,7 +90,7 @@ async def verify_access_token(token: str, credentials_exception: HTTPException) 
         # Convert IDs to proper types
         if user_id:
             try:
-                user_id = int(user_id) if user_id.isdigit() else uuid.UUID(user_id)
+                user_id = uuid.UUID(user_id)
             except (ValueError, AttributeError):
                 raise credentials_exception
                 
@@ -141,9 +141,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
     if db_user is None:
         raise credentials_exception
     
-    # Determine admin status based on role
-    is_admin = db_user.role in ["admin", "manager"]
-    
     # Create a user object with proper field assignments
     user = User(
         id=db_user.id,
@@ -151,7 +148,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: AsyncSe
         first_name=db_user.first_name,  
         last_name=db_user.last_name,    
         role=db_user.role,              
-        is_admin=is_admin,              # Derived from role
         gym_id=db_user.gym_id
     )
     

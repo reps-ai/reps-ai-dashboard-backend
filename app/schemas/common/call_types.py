@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import field_validator, ConfigDict, BaseModel, Field
 
 class CallDirection(str, Enum):
     INBOUND = "inbound"
@@ -33,31 +33,30 @@ class TranscriptEntry(BaseModel):
     speaker: str = Field(
         ..., 
         description="Speaker identifier (agent or customer)",
-        example="agent"
+        examples=["agent"]
     )
     text: str = Field(
         ..., 
         description="Text spoken by the speaker",
-        example="How can I help you today?"
+        examples=["How can I help you today?"]
     )
     timestamp: float = Field(
         ..., 
         ge=0.0, 
         description="Timestamp in seconds from the start of the call",
-        example=10.5
+        examples=[10.5]
     )
     
-    @validator('speaker')
+    @field_validator('speaker')
+    @classmethod
     def validate_speaker(cls, v):
         if v.lower() not in ["agent", "customer", "system"]:
             raise ValueError("Speaker must be 'agent', 'customer', or 'system'")
         return v.lower()
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "speaker": "agent",
-                "text": "How can I help you today?",
-                "timestamp": 10.5
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "speaker": "agent",
+            "text": "How can I help you today?",
+            "timestamp": 10.5
         }
+    })
