@@ -52,4 +52,5 @@ retell-sdk
 simplejson>=3.19.2
 pydantic-settings>=2.2.1
 pydantic-core
+fastapi-mcp
 

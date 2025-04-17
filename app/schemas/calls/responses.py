@@ -3,6 +3,9 @@ from datetime import datetime
 from pydantic import field_validator, model_validator, ConfigDict, BaseModel, Field
 from app.schemas.common.call_types import CallDirection, CallStatus, CallOutcome, CallSentiment, TranscriptEntry
 import uuid
+import json
+import ast
+from backend.utils.helpers.transcript_parser import parse_transcript_block
 
 class LeadSummary(BaseModel):
     id: str = Field(..., description="Unique identifier for the lead")
@@ -152,12 +155,39 @@ class CallDetailResponse(CallResponse):
     @field_validator('transcript', mode="before")
     @classmethod
     def validate_transcript(cls, v):
-        """Ensure transcript is either None or a list"""
+        """
+        Normalize transcript field: parse JSON strings into lists, wrap plain text,
+        and otherwise ensure we return a list or None.
+        """
         if v is None:
             return None
-        if not isinstance(v, list):
-            return None  # Return None for non-list values
-        return v
+        # Try parsing if transcript was stored as a JSON string
+        if isinstance(v, str):
+            # First, attempt JSON decoding
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+            # Next, attempt Python literal eval (for repr strings)
+            try:
+                parsed = ast.literal_eval(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except Exception:
+                pass
+            # Fallback: parse block into utterances if possible
+            parsed = parse_transcript_block(v)
+            if parsed:
+                return parsed
+            # If parsing fails, wrap as a single system message
+            return [{"speaker": "system", "text": v, "timestamp": 0.0}]
+        # If already a list, return as-is
+        if isinstance(v, list):
+            return v
+        # Unrecognized format
+        return None
     model_config = ConfigDict(json_schema_extra={
         "example": {
             "id": "call-123",

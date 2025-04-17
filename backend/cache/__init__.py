@@ -39,7 +39,7 @@ def setup_redis(redis_url: str = "redis://localhost:6379/0"):
         logger.error(f"Failed to initialize Redis client: {str(e)}")
         redis_client = None
         logger.warning("Caching will be disabled due to Redis connection failure")
-        raise
+        return None
 
 def get_redis_client():
     """
