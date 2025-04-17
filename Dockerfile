@@ -6,6 +6,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    redis-server \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first (for better caching)
@@ -21,8 +23,12 @@ COPY . .
 # Set Python to run in unbuffered mode
 ENV PYTHONUNBUFFERED=1
 
-# Expose the port FastAPI will run on
-EXPOSE 8000
+# Copy the entrypoint script and make it executable
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Run the FastAPI app with uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Expose the port FastAPI will run on
+EXPOSE 8000 6379
+
+# Use the entrypoint script
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"] 

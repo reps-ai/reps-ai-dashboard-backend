@@ -40,12 +40,6 @@ class TranscriptEntry(BaseModel):
         description="Text spoken by the speaker",
         examples=["How can I help you today?"]
     )
-    timestamp: float = Field(
-        ..., 
-        ge=0.0, 
-        description="Timestamp in seconds from the start of the call",
-        examples=[10.5]
-    )
     
     @field_validator('speaker')
     @classmethod

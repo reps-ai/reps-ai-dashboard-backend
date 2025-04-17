@@ -6,6 +6,7 @@ from backend.cache.http_cache import HttpResponseCacheMiddleware
 import os
 import logging
 import asyncio
+from fastapi_mcp import FastApiMCP
 
 from app.routes import auth, leads, calls, cache_diagnostics
 
@@ -98,10 +99,11 @@ async def startup_event():
     Initialize services like Redis.
     """
     # Initialize Redis client
+    redis_client = setup_redis(REDIS_URL)
+    if redis_client is None:
+        logger.warning("Redis client initialization returned None, caching disabled for this session")
+        return
     try:
-        # Initialize Redis with a timeout
-        redis_client = setup_redis(REDIS_URL)
-        
         # Verify the Redis connection is working with a simple ping
         loop = asyncio.get_event_loop()
         ping_result = await asyncio.wait_for(redis_client.ping(), timeout=2.0)
