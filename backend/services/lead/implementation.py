@@ -465,3 +465,27 @@ class DefaultLeadService(LeadService):
         
         logger.info(f"Removed tags from lead: {lead_id} -> {tag_list}")
         return lead
+    
+    async def remove_from_campaign(self, lead_id: str) -> Dict[str, Any]:
+        """
+        Remove a lead from its campaign.
+        
+        Args:
+            lead_id: ID of the lead
+            
+        Returns:
+            Updated lead data
+        """
+        try:
+            # Using the SQLAlchemy compatible NULL value for older SA versions
+            from sqlalchemy import null
+            
+            result = await self.lead_repository.update_lead(
+                lead_id, 
+                {"campaign_id": null()}  # This works with older SQLAlchemy versions
+            )
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error removing lead {lead_id} from campaign: {str(e)}")
+            raise ValueError(f"Failed to remove lead from campaign: {str(e)}")

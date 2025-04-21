@@ -111,7 +111,6 @@ class LeadService(ABC):
     #function to update lead details manually can replace many other functions. function should contain all optional parameters to update lead details and update the details of what is passed.
 
 
-    
     @abstractmethod
     async def get_leads_by_status(self, gym_id: str, status: str) -> List[Dict[str, Any]]:
         """
@@ -148,4 +147,17 @@ class LeadService(ABC):
                 - leads: List of lead data
                 - pagination: Dictionary with total, page, page_size, and pages
         """
-        pass 
+        pass
+    
+    @abstractmethod
+    async def remove_from_campaign(self, lead_id: str) -> Dict[str, Any]:
+        """
+        Remove a lead from its campaign.
+        
+        Args:
+            lead_id: ID of the lead
+            
+        Returns:
+            Updated lead data
+        """
+        pass

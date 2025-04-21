@@ -2,7 +2,7 @@
 Implementation of the Campaign Management Service.
 """
 from typing import List, Dict, Any, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import uuid
 
 from .interface import CampaignService
@@ -207,58 +207,14 @@ class DefaultCampaignService(CampaignService):
         try:
             logger.info(f"Scheduling calls for campaign {campaign_id} on {target_date}")
             
-            # Check if campaign exists and is active
-            campaign = await self.campaign_repository.get_campaign_by_id(campaign_id)
-            if not campaign:
-                logger.warning(f"Campaign with ID {campaign_id} not found")
-                raise ValueError(f"Campaign with ID {campaign_id} not found")
+            # Import here to avoid circular imports
+            from ...tasks.campaign.schedule_calls import schedule_campaign_task
             
-            if not campaign.get('is_active', False):
-                logger.warning(f"Campaign with ID {campaign_id} is not active")
-                raise ValueError(f"Campaign with ID {campaign_id} is not active")
+            # Queue the task in Celery
+            result = schedule_campaign_task.delay(campaign_id, target_date.isoformat())
             
-            # Get campaign schedule
-            schedule = await self.campaign_repository.get_campaign_schedule(campaign_id)
-            if not schedule:
-                logger.warning(f"No schedule found for campaign {campaign_id}")
-                raise ValueError(f"No schedule found for campaign {campaign_id}")
+            return [{"task_id": result.id, "status": "scheduled"}]
             
-            # Check if the target date is within the campaign date range
-            start_date = schedule.get('start_date')
-            end_date = schedule.get('end_date')
-            
-            if start_date and target_date.date() < start_date:
-                logger.warning(f"Target date {target_date.date()} is before campaign start date {start_date}")
-                raise ValueError(f"Target date is before campaign start date")
-            
-            if end_date and target_date.date() > end_date:
-                logger.warning(f"Target date {target_date.date()} is after campaign end date {end_date}")
-                raise ValueError(f"Target date is after campaign end date")
-            
-            # Check if the target day is allowed by campaign settings
-            weekday = target_date.strftime('%a').lower()
-            call_days = schedule.get('call_days', [])
-            
-            if call_days and weekday not in call_days:
-                logger.warning(f"Target day {weekday} is not in allowed call days: {call_days}")
-                raise ValueError(f"Target day is not in allowed call days")
-            
-            # Get leads associated with the campaign
-            campaign_leads = await self.campaign_repository.get_campaign_leads(campaign_id)
-            
-            # In a real implementation, you would create call records for each lead
-            # based on campaign settings, call history, etc.
-            # This is a simplified placeholder implementation
-            scheduled_calls = []
-            
-            # Note: The actual scheduling logic would typically be more complex
-            # and would be implemented in a background task or Celery worker
-            logger.info(f"Scheduled {len(scheduled_calls)} calls for campaign {campaign_id}")
-            return scheduled_calls
-            
-        except ValueError as ve:
-            # Re-raise the value errors with proper message
-            raise ve
         except Exception as e:
             logger.error(f"Error scheduling calls for campaign {campaign_id}: {str(e)}")
             raise ValueError(f"Error scheduling calls for campaign: {str(e)}")
@@ -434,3 +390,24 @@ class DefaultCampaignService(CampaignService):
         except Exception as e:
             logger.error(f"Error removing leads from campaign {campaign_id}: {str(e)}")
             raise ValueError(f"Error removing leads from campaign: {str(e)}")
+    
+    async def increment_call_count(self, campaign_id: str, count: int = 1) -> Dict[str, Any]:
+        """
+        Increment the call count for a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            count: Number to increment by (default 1)
+            
+        Returns:
+            Updated campaign data
+        """
+        logger.info(f"Incrementing call count for campaign {campaign_id} by {count}")
+        try:
+            result = await self.campaign_repository.increment_call_count(campaign_id, count)
+            if not result:
+                raise ValueError(f"Campaign with ID {campaign_id} not found")
+            return result
+        except Exception as e:
+            logger.error(f"Error incrementing call count: {str(e)}")
+            raise ValueError(f"Failed to increment call count: {str(e)}")

@@ -341,16 +341,6 @@ class DefaultCallService(CallService):
             logger.error(f"Error deleting call {call_id}: {str(e)}")
             raise ValueError(f"Error deleting call: {str(e)}")
 
-
-
-
-
-
-
-
-
-    """Optional Beyond This point."""
-    #Optional
     async def process_webhook_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a webhook event from the call provider.
@@ -419,6 +409,17 @@ class DefaultCallService(CallService):
                         "transcript": transcript
                     }
                     updated_call = await self.call_repository.update_call(call_id, update_data)
+                    
+                    # If this call is associated with a campaign, increment the campaign's call count
+                    if campaign_id := updated_call.get("campaign_id"):
+                        try:
+                            from ...services.campaign.factory import create_campaign_service
+                            campaign_service = create_campaign_service()
+                            await campaign_service.increment_call_count(campaign_id)
+                            logger.info(f"Incremented call count for campaign {campaign_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to increment campaign call count: {str(e)}")
+                    
                     return {"status": "success", "call": updated_call}
                 
                 elif event_type == "call.analyzed":
@@ -476,6 +477,17 @@ class DefaultCallService(CallService):
                 "duration": duration
             }
             updated_call = await self.call_repository.update_call(call_id, update_data)
+            
+            # If this call is associated with a campaign, increment the campaign's call count
+            if campaign_id := updated_call.get("campaign_id"):
+                try:
+                    from ...services.campaign.factory import create_campaign_service
+                    campaign_service = create_campaign_service()
+                    await campaign_service.increment_call_count(campaign_id)
+                    logger.info(f"Incremented call count for campaign {campaign_id}")
+                except Exception as e:
+                    logger.error(f"Failed to increment campaign call count: {str(e)}")
+            
             return {"status": "success", "call": updated_call}
         
         elif event_type == "call.recording":

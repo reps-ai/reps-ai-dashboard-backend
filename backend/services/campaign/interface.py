@@ -111,4 +111,18 @@ class CampaignService(ABC):
         Returns:
             List of campaigns matching the criteria
         """
-        pass 
+        pass
+
+    @abstractmethod
+    async def increment_call_count(self, campaign_id: str, count: int = 1) -> Dict[str, Any]:
+        """
+        Increment the call count for a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            count: Number to increment by (default 1)
+            
+        Returns:
+            Updated campaign data
+        """
+        pass

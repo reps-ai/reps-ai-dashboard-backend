@@ -4,13 +4,12 @@ PostgreSQL implementation of the campaign repository.
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, insert, update, delete
+from sqlalchemy import select, insert, update, delete, and_, or_, func
+import json
 
 from ..campaign_repository import CampaignRepository
-from ....models.campaign import Campaign
-from ....models.campaign_lead import CampaignLead
-from ....models.campaign_schedule import CampaignSchedule
-
+from ....models.campaign.follow_up_campaign import FollowUpCampaign
+from ....models.lead.lead import Lead
 
 class PostgresCampaignRepository(CampaignRepository):
     """
@@ -24,25 +23,14 @@ class PostgresCampaignRepository(CampaignRepository):
     async def create_campaign(self, campaign_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new campaign with scheduling parameters."""
         # Create campaign record
-        campaign = Campaign(**campaign_data)
+        campaign = FollowUpCampaign(**campaign_data)
         self.session.add(campaign)
-        await self.session.flush()
-
-        # If schedule data is provided, create schedule
-        if schedule_data := campaign_data.get('schedule'):
-            schedule = CampaignSchedule(
-                campaign_id=campaign.id,
-                **schedule_data
-            )
-            self.session.add(schedule)
-            await self.session.flush()
-
         await self.session.commit()
         return campaign.to_dict()
 
     async def get_campaign_by_id(self, campaign_id: str) -> Optional[Dict[str, Any]]:
         """Get campaign details by ID."""
-        query = select(Campaign).where(Campaign.id == campaign_id)
+        query = select(FollowUpCampaign).where(FollowUpCampaign.id == campaign_id)
         result = await self.session.execute(query)
         if campaign := result.scalar_one_or_none():
             return campaign.to_dict()
@@ -51,10 +39,10 @@ class PostgresCampaignRepository(CampaignRepository):
     async def update_campaign(self, campaign_id: str, campaign_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update campaign details."""
         query = (
-            update(Campaign)
-            .where(Campaign.id == campaign_id)
+            update(FollowUpCampaign)
+            .where(FollowUpCampaign.id == campaign_id)
             .values(**campaign_data)
-            .returning(Campaign)
+            .returning(FollowUpCampaign)
         )
         result = await self.session.execute(query)
         await self.session.commit()
@@ -64,28 +52,53 @@ class PostgresCampaignRepository(CampaignRepository):
 
     async def delete_campaign(self, campaign_id: str) -> bool:
         """Delete a campaign."""
-        query = delete(Campaign).where(Campaign.id == campaign_id)
+        query = delete(FollowUpCampaign).where(FollowUpCampaign.id == campaign_id)
         result = await self.session.execute(query)
         await self.session.commit()
         return result.rowcount > 0
 
     async def get_active_campaigns(self, gym_id: str) -> List[Dict[str, Any]]:
         """Get all active campaigns for a gym."""
+        # Since there's no is_active field, we need to filter by date range
+        current_date = datetime.now().date()
+        
         query = (
-            select(Campaign)
-            .where(Campaign.gym_id == gym_id)
-            .where(Campaign.is_active == True)
+            select(FollowUpCampaign)
+            .where(FollowUpCampaign.gym_id == gym_id)
+            .where(
+                and_(
+                    or_(
+                        FollowUpCampaign.start_date == None,
+                        FollowUpCampaign.start_date <= current_date
+                    ),
+                    or_(
+                        FollowUpCampaign.end_date == None,
+                        FollowUpCampaign.end_date >= current_date
+                    )
+                )
+            )
         )
         result = await self.session.execute(query)
         return [campaign.to_dict() for campaign in result.scalars().all()]
 
     async def get_campaigns_for_date(self, target_date: date) -> List[Dict[str, Any]]:
         """Get campaigns scheduled for a specific date."""
+        current_date = datetime.now().date()
+        
         query = (
-            select(Campaign)
-            .join(CampaignSchedule)
-            .where(CampaignSchedule.start_date <= target_date)
-            .where(CampaignSchedule.end_date >= target_date)
+            select(FollowUpCampaign)
+            .where(
+                and_(
+                    or_(
+                        FollowUpCampaign.start_date == None,
+                        FollowUpCampaign.start_date <= target_date
+                    ),
+                    or_(
+                        FollowUpCampaign.end_date == None,
+                        FollowUpCampaign.end_date >= target_date
+                    )
+                )
+            )
         )
         result = await self.session.execute(query)
         return [campaign.to_dict() for campaign in result.scalars().all()]
@@ -93,10 +106,10 @@ class PostgresCampaignRepository(CampaignRepository):
     async def update_campaign_metrics(self, campaign_id: str, metrics: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update campaign metrics."""
         query = (
-            update(Campaign)
-            .where(Campaign.id == campaign_id)
+            update(FollowUpCampaign)
+            .where(FollowUpCampaign.id == campaign_id)
             .values(metrics=metrics)
-            .returning(Campaign)
+            .returning(FollowUpCampaign)
         )
         result = await self.session.execute(query)
         await self.session.commit()
@@ -106,75 +119,164 @@ class PostgresCampaignRepository(CampaignRepository):
 
     async def get_campaign_leads(self, campaign_id: str) -> List[Dict[str, Any]]:
         """Get all leads associated with a campaign."""
-        query = (
-            select(CampaignLead)
-            .where(CampaignLead.campaign_id == campaign_id)
-        )
+        # Query leads with the campaign_id field
+        query = select(Lead).where(Lead.campaign_id == campaign_id)
         result = await self.session.execute(query)
-        return [lead.to_dict() for lead in result.scalars().all()]
+        leads = result.scalars().all()
+        
+        # Convert to dictionaries
+        return [lead.to_dict() for lead in leads]
 
-    async def add_leads_to_campaign(self, campaign_id: str, lead_ids: List[str]) -> bool:
-        """Add leads to a campaign."""
-        campaign_leads = [
-            CampaignLead(campaign_id=campaign_id, lead_id=lead_id)
-            for lead_id in lead_ids
-        ]
-        self.session.add_all(campaign_leads)
-        await self.session.commit()
-        return True
-
-    async def remove_leads_from_campaign(self, campaign_id: str, lead_ids: List[str]) -> bool:
-        """Remove leads from a campaign."""
+    async def increment_call_count(self, campaign_id: str, count: int = 1) -> Optional[Dict[str, Any]]:
+        """Increment the call count for a campaign."""
         query = (
-            delete(CampaignLead)
-            .where(CampaignLead.campaign_id == campaign_id)
-            .where(CampaignLead.lead_id.in_(lead_ids))
+            update(FollowUpCampaign)
+            .where(FollowUpCampaign.id == campaign_id)
+            .values(call_count=FollowUpCampaign.call_count + count)
+            .returning(FollowUpCampaign)
         )
         result = await self.session.execute(query)
         await self.session.commit()
-        return result.rowcount > 0
+        if campaign := result.scalar_one_or_none():
+            return campaign.to_dict()
+        return None
 
-    async def get_campaign_schedule(self, campaign_id: str) -> Dict[str, Any]:
-        """Get the calling schedule for a campaign."""
-        try:
-            query = (
-                select(CampaignSchedule)
-                .where(CampaignSchedule.campaign_id == campaign_id)
-            )
-            result = await self.session.execute(query)
-            if schedule := result.scalar_one_or_none():
-                return schedule.to_dict()
+    async def get_campaign_schedule(self, campaign_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get campaign schedule information.
+        This is currently stored in the metrics JSON field.
+        
+        Args:
+            campaign_id: ID of the campaign
+            
+        Returns:
+            Dictionary containing schedule information or None if not found
+        """
+        # Get the campaign
+        campaign = await self.get_campaign_by_id(campaign_id)
+        if not campaign:
+            return None
+            
+        # Extract schedule information from metrics
+        metrics = campaign.get('metrics', {})
+        if not metrics:
             return {}
-        except Exception as e:
-            error_msg = str(e) if str(e) else "Unknown error retrieving campaign schedule"
-            raise ValueError(f"Failed to retrieve campaign schedule: {error_msg}")
+            
+        # Return schedule data if it exists
+        schedule_data = metrics.get('schedule', {})
+        return schedule_data
 
     async def update_campaign_schedule(self, campaign_id: str, schedule_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Update the calling schedule for a campaign."""
-        try:
-            check_query = select(CampaignSchedule).where(CampaignSchedule.campaign_id == campaign_id)
-            check_result = await self.session.execute(check_query)
-            exists = check_result.scalar_one_or_none() is not None
+        """
+        Update campaign schedule information.
+        This is currently stored in the metrics JSON field.
+        
+        Args:
+            campaign_id: ID of the campaign
+            schedule_data: Dictionary containing updated schedule information
             
-            if exists:
-                query = (
-                    update(CampaignSchedule)
-                    .where(CampaignSchedule.campaign_id == campaign_id)
-                    .values(**schedule_data)
-                    .returning(CampaignSchedule)
-                )
-                result = await self.session.execute(query)
-                await self.session.commit()
-                if schedule := result.scalar_one_or_none():
-                    return schedule.to_dict()
-            else:
-                new_schedule = CampaignSchedule(campaign_id=campaign_id, **schedule_data)
-                self.session.add(new_schedule)
-                await self.session.commit()
-                return new_schedule.to_dict()
-                
+        Returns:
+            Updated schedule information or None if campaign not found
+        """
+        # Get the campaign
+        campaign = await self.get_campaign_by_id(campaign_id)
+        if not campaign:
             return None
+            
+        # Get current metrics or initialize if not exists
+        metrics = campaign.get('metrics', {})
+        if not metrics:
+            metrics = {}
+            
+        # Update schedule information
+        metrics['schedule'] = schedule_data
+        
+        # Update the campaign
+        query = (
+            update(FollowUpCampaign)
+            .where(FollowUpCampaign.id == campaign_id)
+            .values(metrics=metrics)
+            .returning(FollowUpCampaign)
+        )
+        result = await self.session.execute(query)
+        await self.session.commit()
+        
+        if updated_campaign := result.scalar_one_or_none():
+            return updated_campaign.metrics.get('schedule', {}) if updated_campaign.metrics else {}
+            
+        return None
+
+    async def add_leads_to_campaign(self, campaign_id: str, lead_ids: List[str]) -> bool:
+        """
+        Add leads to a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            lead_ids: List of lead IDs to add
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Check if campaign exists
+            query = select(FollowUpCampaign).where(FollowUpCampaign.id == campaign_id)
+            result = await self.session.execute(query)
+            campaign = result.scalar_one_or_none()
+            
+            if not campaign:
+                return False
+                
+            # Update each lead to add them to the campaign
+            for lead_id in lead_ids:
+                query = (
+                    update(Lead)
+                    .where(Lead.id == lead_id)
+                    .values(campaign_id=campaign_id)
+                )
+                await self.session.execute(query)
+                
+            await self.session.commit()
+            return True
         except Exception as e:
             await self.session.rollback()
-            error_msg = str(e) if str(e) else "Unknown error updating campaign schedule"
-            raise ValueError(f"Failed to update campaign schedule: {error_msg}")
+            print(f"Error adding leads to campaign: {str(e)}")
+            return False
+
+    async def remove_leads_from_campaign(self, campaign_id: str, lead_ids: List[str]) -> bool:
+        """
+        Remove leads from a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            lead_ids: List of lead IDs to remove
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Check if campaign exists
+            query = select(FollowUpCampaign).where(FollowUpCampaign.id == campaign_id)
+            result = await self.session.execute(query)
+            campaign = result.scalar_one_or_none()
+            
+            if not campaign:
+                return False
+                
+            # Update each lead to remove them from the campaign
+            for lead_id in lead_ids:
+                query = (
+                    update(Lead)
+                    .where(and_(
+                        Lead.id == lead_id,
+                        Lead.campaign_id == campaign_id
+                    ))
+                    .values(campaign_id=None)
+                )
+                await self.session.execute(query)
+                
+            await self.session.commit()
+            return True
+        except Exception as e:
+            await self.session.rollback()
+            print(f"Error removing leads from campaign: {str(e)}")
+            return False
