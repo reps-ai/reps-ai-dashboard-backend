@@ -1,5 +1,5 @@
 """
-Lead task module.
+Lead processing tasks package.
 
 This module exports background tasks for lead-related operations.
 """

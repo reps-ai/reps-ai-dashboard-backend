@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.db.connections.database import get_db
 from backend.db.repositories.call.implementations.postgres_call_repository import PostgresCallRepository
 from backend.integrations.retell.implementation import RetellImplementation
+from backend.tasks.call.tasks import process_completed_call
 
 router = APIRouter()
 
@@ -92,7 +93,12 @@ async def handle_retell_webhook(
                 "recording_url": processed_data.get("raw_data", {}).get("recording_url"),
                 "transcript": processed_data.get("raw_data", {}).get("transcript")
             }
-            return await call_repo.update_call(existing_call["id"], update_data)
+            update_result = await call_repo.update_call(existing_call["id"], update_data)
+            
+            # Trigger the Celery task to process the completed call in the background
+            process_completed_call.delay(call_id=call_id)
+            
+            return update_result
             
         elif event_type == "call_analyzed":
             # Handle call analyzed event
@@ -102,12 +108,26 @@ async def handle_retell_webhook(
                     "message": f"Call with external ID {call_id} not found"
                 }
             
+            # Get successful flag and custom data
+            successful = processed_data.get("successful", False)
+            custom_data = processed_data.get("custom_data", {})
+            
+            # Determine outcome based on analysis
+            outcome = "unknown"
+            if successful:
+                # Check if there's a specific outcome in custom data
+                if custom_data.get("outcome") in ["scheduled", "interested", "callback"]:
+                    outcome = custom_data.get("outcome")
+                else:
+                    outcome = "scheduled" # Default success outcome is scheduled
+            else:
+                outcome = "not_interested"
+            
             # Update call with analysis data
             update_data = {
                 "summary": processed_data.get("summary"),
                 "sentiment": processed_data.get("sentiment"),
-                # Set outcome based on call success
-                "outcome": "scheduled" if processed_data.get("successful") else "not_interested"
+                "outcome": outcome
             }
             return await call_repo.update_call(existing_call["id"], update_data)
             

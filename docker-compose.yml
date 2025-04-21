@@ -8,6 +8,8 @@ services:
       - "8000:8000"
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - redis
     restart: unless-stopped
@@ -33,13 +35,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    command: celery -A backend.celery_app worker -Q lead_tasks -l INFO
+    command: celery -A backend.celery_app.app worker -Q lead_tasks -l INFO -c 2
     volumes:
       - .:/app
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - WORKER_CONCURRENCY=2
     depends_on:
       - redis
     restart: unless-stopped
@@ -50,18 +51,34 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    command: celery -A backend.celery_app worker -Q call_tasks -l INFO
+    command: celery -A backend.celery_app.app worker -Q call_tasks -l DEBUG -c 2
     volumes:
       - .:/app
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - WORKER_CONCURRENCY=2
     depends_on:
       - redis
     restart: unless-stopped
-    container_name: reps-ai-celery-call
+    container_name: reps-ai-celery-campaign
 
+  # Celery worker for report and notification tasks
+  celery-worker-reports:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: celery -A backend.celery_app.app worker -Q reports_tasks,notification_tasks -l INFO -c 2
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+    restart: unless-stopped
+    container_name: reps-ai-celery-reports
+
+    # Celery worker for report and notification tasks
   # Celery worker for campaign tasks
   celery-worker-campaign:
     build:
@@ -84,7 +101,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    command: celery -A backend.celery_app beat -l INFO
+    command: celery -A backend.celery_app.app beat -l INFO
     volumes:
       - .:/app
     environment:

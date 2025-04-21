@@ -1,40 +1,52 @@
 """
-Celery application configuration.
+Celery application factory and configuration.
 """
 from celery import Celery
-import os
-from celery.schedules import crontab
+from backend.config.celery_settings import CelerySettings
 
-# Create Celery app
-app = Celery('backend')
 
-# Load configuration from config module
-app.config_from_object('backend.config.celery_config')
+def create_celery_app(settings: CelerySettings = None) -> Celery:
+    """
+    Create and configure a Celery application instance.
+    
+    Args:
+        settings: Optional CelerySettings instance. If not provided, default settings are used.
+        
+    Returns:
+        Configured Celery application instance.
+    """
+    if settings is None:
+        settings = CelerySettings()
+    
+    app = Celery("reps_ai")
+    
+    # Configure Celery from settings
+    app.conf.update(
+        broker_url=settings.BROKER_URL,
+        result_backend=settings.RESULT_BACKEND,
+        task_serializer=settings.TASK_SERIALIZER,
+        result_serializer=settings.RESULT_SERIALIZER,
+        accept_content=settings.ACCEPT_CONTENT,
+        timezone=settings.TIMEZONE,
+        enable_utc=settings.ENABLE_UTC,
+        task_track_started=settings.TASK_TRACK_STARTED,
+        task_time_limit=settings.TASK_TIME_LIMIT,
+        worker_concurrency=settings.WORKER_CONCURRENCY,
+        beat_schedule=settings.BEAT_SCHEDULE,
+        task_routes=settings.TASK_ROUTES,
+    )
+    
+    # Auto-discover tasks in the specified packages
+    app.autodiscover_tasks(["backend.tasks.lead", 
+                           "backend.tasks.reports", 
+                           "backend.tasks.notifications",
+                           "backend.tasks.call"])
+    
+    return app
 
-# Auto-discover tasks from registered task modules
-app.autodiscover_tasks([
-    'backend.tasks.lead',
-    'backend.tasks.call',
-    'backend.tasks.campaign',
-    'backend.tasks.analytics',
-    'backend.tasks.utils.test_tasks'
-])
 
-# Add campaign scheduling task routes
-app.conf.task_routes = {
-    'campaign.schedule_campaign': {'queue': 'campaign_tasks'},
-    'call.trigger_call': {'queue': 'campaign_tasks'},
-    'campaign.schedule_all_campaigns': {'queue': 'campaign_tasks'}
-}
-
-# Configure Celery beat schedule
-app.conf.beat_schedule = {
-    'schedule-all-campaigns-daily': {
-        'task': 'campaign.schedule_all_campaigns',
-        'schedule': crontab(hour=6, minute=0),  # Runs daily at 6:00 AM UTC
-        'args': (),
-    }
-}
+# Create a global Celery app instance for easy importing
+app = create_celery_app()
 
 if __name__ == '__main__':
     app.start()

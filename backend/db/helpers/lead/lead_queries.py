@@ -501,7 +501,6 @@ async def get_leads_by_gym_with_filters(
         raise Exception(f"Failed to retrieve leads: {str(e)}")
 
 async def update_lead_after_call_db(
-    
     session: AsyncSession,
     lead_id: str,
     call_data: Dict[str, Any]
@@ -512,108 +511,59 @@ async def update_lead_after_call_db(
     Args:
         session: Database session
         lead_id: Lead ID
-        call_data: Call data
+        call_data: Call data containing outcome and summary
         
     Returns:
         Updated lead data if successful, None if lead not found
     """
+    logger.info(f"Updating lead {lead_id} after call with outcome: {call_data.get('outcome')}")
+    
     # Check if lead exists
     lead_query = select(Lead).where(Lead.id == lead_id)
     lead_result = await session.execute(lead_query)
     lead = lead_result.scalar_one_or_none()
     
     if not lead:
+        logger.error(f"Lead with ID {lead_id} not found")
         return None
     
-    # Create call log record
-    call_log = CallLog(
-        lead_id=lead_id,
-        agent_user_id=call_data.get("agent_user_id"),
-        duration=call_data.get("duration", 0),
-        call_type=call_data.get("call_type", "outbound"),
-        human_notes=call_data.get("notes"),
-        outcome=call_data.get("outcome"),
-        call_status="completed",
-        start_time=call_data.get("start_time"),
-        end_time=call_data.get("end_time") or datetime.now(),
-        recording_url=call_data.get("recording_url"),
-        transcript=call_data.get("transcript"),
-        summary=call_data.get("summary"),
-        sentiment=call_data.get("sentiment"),
-        campaign_id=call_data.get("campaign_id")
-    )
-    session.add(call_log)
-    
-    # Update lead based on call outcome
+    # Update lead based on call data
     updates = {
-        "last_called": datetime.now()
+        "last_called": datetime.now(),
+        "last_conversation_summary": call_data.get("notes", "")
     }
     
     # Update status based on outcome
     outcome = call_data.get("outcome")
-    if outcome == "scheduled":
-        updates["lead_status"] = "scheduled"
-    elif outcome == "not_interested":
-        updates["lead_status"] = "closed"
-    elif outcome == "callback":
-        updates["lead_status"] = "callback"
+    if outcome:
+        logger.info(f"Processing outcome: {outcome}")
+        if outcome == "scheduled":
+            updates["lead_status"] = "scheduled"
+        elif outcome == "not_interested":
+            updates["lead_status"] = "closed"
+        elif outcome == "interested":
+            updates["lead_status"] = "qualified"
+        elif outcome == "callback":
+            updates["lead_status"] = "callback"
+        else:
+            # For unknown outcomes, default to contacted
+            updates["lead_status"] = "contacted"
+            logger.warning(f"Unknown outcome type: {outcome}, defaulting to 'contacted'")
     
-    # Update qualification if provided
-    qualification = call_data.get("qualification")
-    if qualification:
-        updates["qualification_score"] = qualification
-    
-    if call_data.get("qualification_notes"):
-        updates["qualification_notes"] = call_data.get("qualification_notes")
-    
-    # Update lead record if needed
-    if updates:
-        update_query = (
-            update(Lead)
-            .where(Lead.id == lead_id)
-            .values(**updates)
-        )
-        await session.execute(update_query)
-    
-    # Add tags if provided
-    tags = call_data.get("tags", [])
-    if tags:
-        # Get existing tags for this lead
-        existing_tags_query = (
-            select(Tag)
-            .join(lead_tag, Tag.id == lead_tag.c.tag_id)
-            .where(lead_tag.c.lead_id == lead_id)
-        )
-        existing_tags_result = await session.execute(existing_tags_query)
-        existing_tags = existing_tags_result.scalars().all()
-        existing_tag_names = [tag.name for tag in existing_tags]
-        
-        # Add only new tags
-        for tag_name in tags:
-            if tag_name not in existing_tag_names:
-                # Check if tag exists
-                tag_query = select(Tag).where(Tag.name == tag_name)
-                tag_result = await session.execute(tag_query)
-                tag = tag_result.scalar_one_or_none()
-                
-                if not tag:
-                    # Create new tag
-                    tag = Tag(name=tag_name)
-                    session.add(tag)
-                    await session.flush()  # Flush to get the ID
-                
-                # Create association
-                stmt = insert(lead_tag).values(
-                    lead_id=lead_id,
-                    tag_id=tag.id,
-                    created_at=datetime.now()
-                )
-                await session.execute(stmt)
-    
+    # Update lead record
+    update_query = (
+        update(Lead)
+        .where(Lead.id == lead_id)
+        .values(**updates)
+    )
+    await session.execute(update_query)
     await session.commit()
+    
+    logger.info(f"Updated lead {lead_id} status to {updates.get('lead_status')}")
     
     # Get updated lead data
     return await get_lead_with_related_data(session, lead_id)
+
 #No errors
 async def get_prioritized_leads_db(
     session: AsyncSession,
