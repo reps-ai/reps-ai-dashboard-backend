@@ -136,25 +136,45 @@ class PostgresCampaignRepository(CampaignRepository):
 
     async def get_campaign_schedule(self, campaign_id: str) -> Dict[str, Any]:
         """Get the calling schedule for a campaign."""
-        query = (
-            select(CampaignSchedule)
-            .where(CampaignSchedule.campaign_id == campaign_id)
-        )
-        result = await self.session.execute(query)
-        if schedule := result.scalar_one_or_none():
-            return schedule.to_dict()
-        return {}
+        try:
+            query = (
+                select(CampaignSchedule)
+                .where(CampaignSchedule.campaign_id == campaign_id)
+            )
+            result = await self.session.execute(query)
+            if schedule := result.scalar_one_or_none():
+                return schedule.to_dict()
+            return {}
+        except Exception as e:
+            error_msg = str(e) if str(e) else "Unknown error retrieving campaign schedule"
+            raise ValueError(f"Failed to retrieve campaign schedule: {error_msg}")
 
     async def update_campaign_schedule(self, campaign_id: str, schedule_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update the calling schedule for a campaign."""
-        query = (
-            update(CampaignSchedule)
-            .where(CampaignSchedule.campaign_id == campaign_id)
-            .values(**schedule_data)
-            .returning(CampaignSchedule)
-        )
-        result = await self.session.execute(query)
-        await self.session.commit()
-        if schedule := result.scalar_one_or_none():
-            return schedule.to_dict()
-        return None
+        try:
+            check_query = select(CampaignSchedule).where(CampaignSchedule.campaign_id == campaign_id)
+            check_result = await self.session.execute(check_query)
+            exists = check_result.scalar_one_or_none() is not None
+            
+            if exists:
+                query = (
+                    update(CampaignSchedule)
+                    .where(CampaignSchedule.campaign_id == campaign_id)
+                    .values(**schedule_data)
+                    .returning(CampaignSchedule)
+                )
+                result = await self.session.execute(query)
+                await self.session.commit()
+                if schedule := result.scalar_one_or_none():
+                    return schedule.to_dict()
+            else:
+                new_schedule = CampaignSchedule(campaign_id=campaign_id, **schedule_data)
+                self.session.add(new_schedule)
+                await self.session.commit()
+                return new_schedule.to_dict()
+                
+            return None
+        except Exception as e:
+            await self.session.rollback()
+            error_msg = str(e) if str(e) else "Unknown error updating campaign schedule"
+            raise ValueError(f"Failed to update campaign schedule: {error_msg}")
