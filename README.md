@@ -45,3 +45,50 @@ This project uses FastAPI, SQLAlchemy, and Pydantic for API development.
 
 [MIT License](LICENSE) # reps-ai-dashboard-backend
 TESTING THE AUTO DEPLOY FUNCTIONALITY
+
+## Celery Background Tasks
+
+The project uses Celery for handling background and scheduled tasks, with Redis as the message broker.
+
+### Architecture
+
+- **Celery App Factory**: Configured in `backend/celery_app.py` with settings from `backend/config/celery_settings.py`
+- **Task Organization**: Tasks are organized by domain in separate modules:
+  - `backend/tasks/lead/`: Lead qualification and processing
+  - `backend/tasks/reports/`: Report generation
+  - `backend/tasks/notifications/`: Email and other notifications
+- **Base Task Class**: Common functionality in `backend/tasks/base.py`
+- **Services**: Each task uses a corresponding service class for business logic
+
+### Running Celery Workers
+
+Run a worker for lead tasks:
+```bash
+./start_celery_worker.sh lead_tasks
+```
+
+Run a worker for report and notification tasks:
+```bash
+./start_celery_worker.sh reports_tasks,notification_tasks
+```
+
+### Running Celery Beat
+
+To start the scheduler for periodic tasks:
+```bash
+./start_celery_beat.sh
+```
+
+### Docker Compose
+
+The provided docker-compose.yml includes:
+- Redis as message broker and result backend
+- API service
+- Lead worker
+- Reports and notifications worker
+- Beat scheduler
+
+Start all services with:
+```bash
+docker-compose up -d
+```

@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 # Redis client instance to be initialized during app startup
 redis_client = None
 
-def setup_redis(redis_url: str = "redis://localhost:6379/0"):
+def setup_redis(redis_url: str = "redis://redis:6379/0"):
     """
     Initialize the Redis client.
     Should be called during application startup.
