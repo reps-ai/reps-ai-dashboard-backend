@@ -12,8 +12,40 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          path: repo
 
-      - name: Make deploy script executable and run it
+      - name: Update deployment script
         run: |
+          # Copy the updated deployment script to the target location
+          cp ./repo/update_and_redeploy.sh /Users/home/reps-ai-backend/reps-ai-dashboard-backend/update_and_redeploy.sh
           chmod +x /Users/home/reps-ai-backend/reps-ai-dashboard-backend/update_and_redeploy.sh
-          /Users/home/reps-ai-backend/reps-ai-dashboard-backend/update_and_redeploy.sh
+          
+      - name: Run deployment with PM2
+        run: |
+          # Stop any existing PM2 process
+          pm2 stop reps-backend || true
+          pm2 delete reps-backend || true
+          
+          # Start a new PM2 process with the deployment script
+          cd /Users/home/reps-ai-backend/reps-ai-dashboard-backend
+          pm2 start update_and_redeploy.sh \
+            --name reps-backend \
+            --interpreter bash \
+            --no-autorestart
+          
+          # Monitor the logs briefly to catch immediate errors
+          echo "Waiting for deployment to complete..."
+          sleep 5
+          pm2 logs reps-backend --lines 20 || true
+          
+          # Check if the process is still running (success) or failed
+          if pm2 show reps-backend | grep -q "status.*online"; then
+            echo "Deployment running successfully!"
+            # Save the PM2 process list
+            pm2 save
+          else
+            echo "Deployment failed!"
+            pm2 logs reps-backend --lines 100
+            exit 1
+          fi
