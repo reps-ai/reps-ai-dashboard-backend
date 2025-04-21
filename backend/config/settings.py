@@ -19,8 +19,8 @@ DEFAULT_RETRY_NUMBER = int(os.getenv("DEFAULT_RETRY_NUMBER", "2"))
 DEFAULT_RETRY_GAP = int(os.getenv("DEFAULT_RETRY_GAP", "1"))  # in days
 
 # Task queue settings
-TASK_QUEUE_URL = os.getenv("TASK_QUEUE_URL", "redis://localhost:6379/0")
-TASK_QUEUE_BACKEND = os.getenv("TASK_QUEUE_BACKEND", "redis://localhost:6379/0")
+TASK_QUEUE_URL = os.getenv("TASK_QUEUE_URL", "redis://redis:6379/0")
+TASK_QUEUE_BACKEND = os.getenv("TASK_QUEUE_BACKEND", "redis://redis:6379/0")
 
 # Logging settings
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

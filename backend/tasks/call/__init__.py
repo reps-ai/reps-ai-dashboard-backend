@@ -1,5 +1,5 @@
 """
-Call tasks module.
+Call processing tasks package.
 """
 from .call_processing import (
     process_call_completion,

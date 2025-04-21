@@ -146,7 +146,7 @@ class DefaultLeadService(LeadService):
         logger.info(f"Retrieved {len(leads)} prioritized leads for gym: {gym_id}")
         return leads
     
-    #Background Task -> Purely a background task, after the call is made, we need to take that information and update the lead.
+    #Update lead after a call is completed
     async def update_lead_after_call(self, lead_id: str, call_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update lead information after a call.
@@ -154,55 +154,26 @@ class DefaultLeadService(LeadService):
         Args:
             lead_id: ID of the lead
             call_data: Dictionary containing call information
-                - call_id: ID of the call
-                - outcome: Outcome of the call
-                - notes: Notes from the call
-                - tags: Tags to add to the lead
-                - qualification: Updated qualification status
-                - sentiment: Sentiment analysis result
+                - outcome: Outcome of the call (scheduled, interested, not_interested, callback)
+                - notes: Summary or notes from the call
                 
         Returns:
             Dictionary containing the updated lead details
         """
-        # For immediate lightweight response
-        if call_data.get("use_background_task", False):
-            # Import here to avoid circular imports
-            from ...tasks.lead.task_definitions import update_lead_after_call as update_lead_after_call_task
-            
-            # Remove the flag to avoid recursion or persistence in the data
-            call_data.pop("use_background_task", None)
-            
-            # Queue the task for background processing
-            update_lead_after_call_task.delay(lead_id, call_data)
-            
-            # Return minimal information immediately
-            return {"id": lead_id, "status": "update_after_call_queued"}
-        
-        # Otherwise, perform the update synchronously
-        # Validate call data
-        if "call_id" not in call_data:
-            raise ValueError("Call ID is required")
-        
-        # Process qualification if provided
-        if qualification := call_data.get("qualification"):
-            await self.qualify_lead(lead_id, qualification)
-        
-        # Process tags if provided
-        if tags := call_data.get("tags"):
-            await self.add_tags_to_lead(lead_id, tags)
-        
-        # Update lead with call information
-        lead = await self.lead_repository.update_lead_after_call(lead_id, call_data)
-        
+        # Validate lead_id exists
+        lead = await self.lead_repository.get_lead_by_id(lead_id)
         if not lead:
             raise ValueError(f"Lead not found: {lead_id}")
         
-        logger.info(f"Updated lead after call: {lead_id}, call: {call_data.get('call_id')}")
+        # Update lead with call information
+        updated_lead = await self.lead_repository.update_lead_after_call(lead_id, call_data)
+        
+        logger.info(f"Updated lead after call: {lead_id}")
         
         # Invalidate cache for this lead
         await invalidate_lead(lead_id)
         
-        return lead
+        return updated_lead
     
     #Background Task
     async def qualify_lead(self, lead_id: str, qualification: str) -> Dict[str, Any]:

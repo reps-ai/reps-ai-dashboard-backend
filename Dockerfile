@@ -15,7 +15,8 @@ COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir retell-sdk
+    && pip install --no-cache-dir retell-sdk \
+    && pip install --no-cache-dir pydantic-settings==2.2.1
 
 # Copy the entire project
 COPY . .
