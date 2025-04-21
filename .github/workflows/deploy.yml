@@ -13,7 +13,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Make deploy script executable and run it
+      - name: Trigger PM2-managed deploy script
         run: |
+          # Ensure script is executable
           chmod +x /Users/home/reps-ai-backend/reps-ai-dashboard-backend/update_and_redeploy.sh
-          /Users/home/reps-ai-backend/reps-ai-dashboard-backend/update_and_redeploy.sh
+
+          # Delete old PM2 process (if any)
+          pm2 delete reps-backend || true
+
+          # Start new PM2-managed run
+          pm2 start /Users/home/reps-ai-backend/reps-ai-dashboard-backend/update_and_redeploy.sh \
+            --name reps-backend \
+            --interpreter bash \
+            --no-autorestart
+
+          # Persist PM2 state across reboots
+          pm2 save
