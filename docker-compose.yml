@@ -60,7 +60,7 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
-    container_name: reps-ai-celery-campaign
+    container_name: reps-ai-celery-call
 
   # Celery worker for report and notification tasks
   celery-worker-reports:
@@ -78,13 +78,12 @@ services:
     restart: unless-stopped
     container_name: reps-ai-celery-reports
 
-    # Celery worker for report and notification tasks
   # Celery worker for campaign tasks
   celery-worker-campaign:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    command: celery -A backend.celery_app worker -Q campaign_tasks -l INFO
+    command: celery -A backend.celery_app.app worker -Q campaign_tasks -l INFO
     volumes:
       - .:/app
     environment:
