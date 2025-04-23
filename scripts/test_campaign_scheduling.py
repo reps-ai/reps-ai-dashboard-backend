@@ -12,6 +12,10 @@ import os
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
+# Instead of disabling Redis cache entirely, let's handle errors more gracefully
+# by adding a shorter timeout for Redis operations
+
+
 # Fix imports for the restructured campaign task modules
 from backend.tasks.campaign.task_definitions import ScheduleCampaignTask, ScheduleAllCampaignsTask
 from backend.tasks.campaign.tasks import CampaignSchedulingService
@@ -46,6 +50,21 @@ async def test_campaign_by_id(campaign_id=None):
     print(f"Testing call scheduling for campaign {campaign_id} on {today}")
     
     try:
+        # Get current campaign status
+        campaign = await campaign_scheduling_service.get_campaign(campaign_id)
+        current_status = campaign.get('campaign_status')
+        
+        # Check if campaign is in a status that can be scheduled
+        if current_status not in ['not_started', 'paused']:
+            print(f"Campaign status is '{current_status}'. Only not_started or paused campaigns can be scheduled.")
+            proceed = input("Do you want to temporarily set the status to 'not_started' for testing? (y/n): ")
+            if proceed.lower() == 'y':
+                await campaign_scheduling_service.update_campaign(campaign_id, {'campaign_status': 'not_started'})
+                print(f"Temporarily set campaign status to 'not_started' for testing.")
+            else:
+                print("Test cancelled.")
+                return []
+        
         # Call the async function directly for testing
         result = await schedule_calls_for_campaign(campaign_id, today)
         print(f"Scheduled {len(result)} calls for campaign {campaign_id}")

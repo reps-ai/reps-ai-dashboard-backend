@@ -25,7 +25,9 @@ class FollowUpCampaign(Base):
     end_date = Column(DateTime, nullable=True)
     frequency = Column(Integer, nullable=False)  # Frequency of follow-ups in days
     gap = Column(Integer, nullable=False)  # Gap between follow-ups in days
-    campaign_status = Column(String(50), nullable=False)  # active, completed, paused, cancelled
+    # Update campaign_status with proper default and valid values
+    # Valid values: not_started, active, paused, cancelled, completed
+    campaign_status = Column(String(50), nullable=False, server_default="not_started")
     created_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'))
     updated_at = Column(TIMESTAMP(timezone=True),nullable=False,server_default=text('now()'),onupdate=text('now()'))
     

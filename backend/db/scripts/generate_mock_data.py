@@ -545,7 +545,9 @@ def create_follow_up_campaigns(conn, gym_ids, branch_ids, lead_ids, n=3):
         frequency = random.randint(3, 10)  # Previously was random.randint(1,7)
         
         gap = random.randint(1,3)
-        campaign_status = random.choice(["active", "completed", "paused", "cancelled"])
+        
+        # Update with proper campaign status values
+        campaign_status = random.choice(["not_started", "active", "paused", "cancelled", "completed"])
         
         # Add call_count and metrics fields
         call_count = random.randint(0, frequency//2)  # Make sure call_count is less than frequency

@@ -87,9 +87,10 @@ class CampaignSchedulingService:
             if campaign_end_date and isinstance(campaign_end_date, datetime):
                 campaign_end_date = campaign_end_date.date()
             
-            # First check campaign status - only active campaigns should run
-            if campaign_status != 'active':
-                logger.info(f"Campaign {campaign_id} has status '{campaign_status}', skipping scheduling")
+            # Check campaign status - only not_started or paused campaigns should be scheduled
+            # active means it's already running, cancelled means it's terminated, completed means it's done
+            if campaign_status not in ['not_started', 'paused']:
+                logger.info(f"Campaign {campaign_id} has status '{campaign_status}', cannot be scheduled. Valid statuses for scheduling are 'not_started' or 'paused'")
                 return []
                 
             is_active = True
@@ -229,6 +230,13 @@ class CampaignSchedulingService:
                 'metrics': metrics,
                 'call_count': new_call_count  # Use the dedicated call_count column
             })
+            
+            # After successfully scheduling calls, update status to active if it was not_started
+            if campaign_status == 'not_started' and len(scheduled_calls) > 0:
+                await campaign_service.update_campaign(campaign_id, {
+                    'campaign_status': 'active'
+                })
+                logger.info(f"Updated campaign {campaign_id} status from not_started to active")
             
             # If we've scheduled all the required calls, mark the campaign as complete
             if new_call_count >= frequency:
