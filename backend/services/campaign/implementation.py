@@ -207,8 +207,8 @@ class DefaultCampaignService(CampaignService):
         try:
             logger.info(f"Scheduling calls for campaign {campaign_id} on {target_date}")
             
-            # Import here to avoid circular imports
-            from ...tasks.campaign.schedule_calls import schedule_campaign_task
+            # Import here to avoid circular imports - use the new task_definitions module
+            from ...tasks.campaign.task_definitions import schedule_campaign_task
             
             # Queue the task in Celery
             result = schedule_campaign_task.delay(campaign_id, target_date.isoformat())
@@ -411,3 +411,213 @@ class DefaultCampaignService(CampaignService):
         except Exception as e:
             logger.error(f"Error incrementing call count: {str(e)}")
             raise ValueError(f"Failed to increment call count: {str(e)}")
+    
+    async def pause_campaign(self, campaign_id: str) -> Dict[str, Any]:
+        """
+        Pause an active campaign to stop further call scheduling.
+        
+        Args:
+            campaign_id: ID of the campaign to pause
+            
+        Returns:
+            Dictionary containing the updated campaign details
+            
+        Raises:
+            ValueError: If campaign not found or other error occurs
+        """
+        try:
+            logger.info(f"Pausing campaign with ID: {campaign_id}")
+            
+            # Check if campaign exists
+            existing_campaign = await self.campaign_repository.get_campaign_by_id(campaign_id)
+            if not existing_campaign:
+                logger.warning(f"Campaign with ID {campaign_id} not found")
+                raise ValueError(f"Campaign with ID {campaign_id} not found")
+            
+            # Only pause if campaign is active
+            if existing_campaign.get('campaign_status') != 'active':
+                logger.warning(f"Campaign with ID {campaign_id} is not active (status: {existing_campaign.get('campaign_status')})")
+                return existing_campaign
+            
+            # Update campaign status to paused
+            updated_campaign = await self.campaign_repository.update_campaign(campaign_id, {
+                'campaign_status': 'paused'
+            })
+            
+            logger.info(f"Successfully paused campaign with ID: {campaign_id}")
+            return updated_campaign
+            
+        except ValueError as ve:
+            # Re-raise the value errors with proper message
+            raise ve
+        except Exception as e:
+            logger.error(f"Error pausing campaign {campaign_id}: {str(e)}")
+            raise ValueError(f"Error pausing campaign: {str(e)}")
+    
+    async def cancel_campaign(self, campaign_id: str) -> Dict[str, Any]:
+        """
+        Cancel a campaign and revoke any scheduled tasks.
+        
+        Args:
+            campaign_id: ID of the campaign to cancel
+            
+        Returns:
+            Updated campaign data with cancelled status
+        """
+        try:
+            logger.info(f"Cancelling campaign with ID: {campaign_id}")
+            
+            # Check if campaign exists
+            campaign = await self.campaign_repository.get_campaign_by_id(campaign_id)
+            if not campaign:
+                logger.warning(f"Campaign with ID {campaign_id} not found")
+                raise ValueError(f"Campaign with ID {campaign_id} not found")
+            
+            # Update campaign status to cancelled
+            updated_campaign = await self.campaign_repository.update_campaign(campaign_id, {
+                'campaign_status': 'cancelled'
+            })
+            
+            # Import celery app and revoke related tasks
+            from ...celery_app import app
+            
+            # Query for tasks with this campaign_id
+            i = app.control.inspect()
+            scheduled_tasks = i.scheduled() or {}
+            reserved_tasks = i.reserved() or {}
+            active_tasks = i.active() or {}
+            
+            revoked_count = 0
+            
+            # Function to check if a task is for this campaign
+            def is_campaign_task(task):
+                # Check if it's a campaign-related task and if it contains our campaign_id
+                return (
+                    (task.get('name', '').startswith('campaign.') or
+                     task.get('name', '').startswith('backend.tasks.campaign.'))
+                    and
+                    str(campaign_id) in str(task.get('args', []))
+                )
+            
+            # Process scheduled tasks
+            for worker, tasks in scheduled_tasks.items():
+                for task in tasks:
+                    if is_campaign_task(task):
+                        task_id = task.get('id')
+                        app.control.revoke(task_id, terminate=True)
+                        logger.info(f"Revoked scheduled task: {task_id}")
+                        revoked_count += 1
+            
+            # Process reserved tasks
+            for worker, tasks in reserved_tasks.items():
+                for task in tasks:
+                    if is_campaign_task(task):
+                        task_id = task.get('id')
+                        app.control.revoke(task_id, terminate=True)
+                        logger.info(f"Revoked reserved task: {task_id}")
+                        revoked_count += 1
+            
+            # Process active tasks
+            for worker, tasks in active_tasks.items():
+                for task in tasks:
+                    if is_campaign_task(task):
+                        task_id = task.get('id')
+                        app.control.revoke(task_id, terminate=True)
+                        logger.info(f"Revoked active task: {task_id}")
+                        revoked_count += 1
+            
+            # Find and revoke any call tasks related to this campaign
+            await self._revoke_call_tasks_for_campaign(campaign_id)
+            
+            logger.info(f"Successfully cancelled campaign {campaign_id}. Revoked {revoked_count} tasks.")
+            return updated_campaign
+            
+        except ValueError as ve:
+            # Re-raise the value errors with proper message
+            raise ve
+        except Exception as e:
+            logger.error(f"Error cancelling campaign {campaign_id}: {str(e)}")
+            raise ValueError(f"Error cancelling campaign: {str(e)}")
+    
+    async def _revoke_call_tasks_for_campaign(self, campaign_id: str) -> int:
+        """
+        Find and revoke call tasks for a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            
+        Returns:
+            Number of tasks revoked
+        """
+        from ...celery_app import app
+        revoked_count = 0
+        
+        try:
+            # Get all calls for this campaign
+            calls = await self.campaign_repository.get_call_ids_for_campaign(campaign_id)
+            
+            # For each call, look for tasks with that call ID in args
+            i = app.control.inspect()
+            scheduled_tasks = i.scheduled() or {}
+            
+            # Function to check if a task is for a specific call
+            def is_call_task(task, call_id):
+                return (
+                    task.get('name', '').startswith('call.')
+                    and
+                    str(call_id) in str(task.get('args', []))
+                )
+            
+            # Revoke any scheduled call tasks
+            for call_id in calls:
+                for worker, tasks in scheduled_tasks.items():
+                    for task in tasks:
+                        if is_call_task(task, call_id):
+                            task_id = task.get('id')
+                            app.control.revoke(task_id, terminate=True)
+                            logger.info(f"Revoked call task: {task_id} for call {call_id}")
+                            revoked_count += 1
+            
+            return revoked_count
+            
+        except Exception as e:
+            logger.error(f"Error revoking call tasks for campaign {campaign_id}: {str(e)}")
+            return revoked_count
+    
+    async def get_campaign_leads(self, campaign_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all leads associated with a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            
+        Returns:
+            List of leads for the campaign
+            
+        Raises:
+            ValueError: If campaign not found or other error occurs
+        """
+        try:
+            logger.info(f"Getting leads for campaign: {campaign_id}")
+            
+            # Check if campaign exists
+            campaign = await self.campaign_repository.get_campaign_by_id(campaign_id)
+            if not campaign:
+                logger.warning(f"Campaign with ID {campaign_id} not found")
+                raise ValueError(f"Campaign with ID {campaign_id} not found")
+            
+            # Get campaign leads
+            leads = await self.campaign_repository.get_campaign_leads(campaign_id)
+            
+            # Each lead needs to have a lead_id field for compatibility with older code
+            for lead in leads:
+                if 'id' in lead and 'lead_id' not in lead:
+                    lead['lead_id'] = lead['id']
+            
+            return leads
+            
+        except ValueError as ve:
+            raise ve
+        except Exception as e:
+            logger.error(f"Error retrieving leads for campaign {campaign_id}: {str(e)}")
+            raise ValueError(f"Error retrieving campaign leads: {str(e)}")

@@ -239,6 +239,38 @@ class DefaultCallService(CallService):
             logger.error(f"Error retrieving calls by date range for branch {branch_id}: {str(e)}")
             raise ValueError(f"Error retrieving calls by date range: {str(e)}")
 
+    async def get_scheduled_calls_by_date_range(
+        self, 
+        branch_id: str,
+        start_date: datetime, 
+        end_date: datetime,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get scheduled calls within a date range.
+        
+        Args:
+            branch_id: ID of the branch
+            start_date: Start date for the range
+            end_date: End date for the range
+            page: Page number 
+            page_size: Page size
+            
+        Returns:
+            Dictionary with calls and pagination info
+        """
+        logger.info(f"Getting scheduled calls for branch {branch_id} from {start_date} to {end_date}")
+        
+        try:
+            # Use the repository to get scheduled calls
+            return await self.call_repository.get_scheduled_calls_by_date_range(
+                branch_id, start_date, end_date, page, page_size
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving scheduled calls for branch {branch_id}: {str(e)}")
+            return {"calls": [], "total": 0, "page": page, "page_size": page_size}
+
     async def get_filtered_calls(
         self, 
         branch_id: str,  # Changed from gym_id to branch_id

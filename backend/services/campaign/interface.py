@@ -126,3 +126,29 @@ class CampaignService(ABC):
             Updated campaign data
         """
         pass
+
+    @abstractmethod
+    async def cancel_campaign(self, campaign_id: str) -> Dict[str, Any]:
+        """
+        Cancel a campaign and revoke any scheduled tasks.
+        
+        Args:
+            campaign_id: ID of the campaign to cancel
+            
+        Returns:
+            Updated campaign data with cancelled status
+        """
+        pass
+
+    @abstractmethod
+    async def get_campaign_leads(self, campaign_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all leads associated with a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            
+        Returns:
+            List of leads for the campaign
+        """
+        pass

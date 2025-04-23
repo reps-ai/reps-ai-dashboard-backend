@@ -46,7 +46,9 @@ class FollowUpCampaign(Base):
             "description": self.description,
             "start_date": self.start_date,
             "end_date": self.end_date,
+            # Include both period and frequency for backwards compatibility
             "period": self.frequency,
+            "frequency": self.frequency,  # Explicitly include frequency field
             "gap": self.gap,
             "campaign_status": self.campaign_status,
             "call_count": self.call_count,

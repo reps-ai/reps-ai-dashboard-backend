@@ -1,72 +1,63 @@
 """
 Factory for creating campaign service instances.
 """
-import logging
-from typing import Optional, Dict, Any
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .interface import CampaignService
 from .implementation import DefaultCampaignService
+from ...db.repositories.campaign import create_campaign_repository
 from ...utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
-async def create_campaign_service_async(config: Optional[Dict[str, Any]] = None) -> CampaignService:
+async def create_campaign_service_async(session: Optional[AsyncSession] = None) -> CampaignService:
     """
     Create a campaign service instance asynchronously.
     
     Args:
-        config: Optional service configuration
+        session: Optional database session
         
     Returns:
         Campaign service instance
     """
     logger.info("Creating Campaign Service")
     
-    # Import repository module here to avoid circular imports
-    from ...db.repositories.campaign import create_campaign_repository
-    
     # Create repository
-    campaign_repository = await create_campaign_repository()
+    campaign_repository = await create_campaign_repository(session)
     
-    # Create and return service
-    return DefaultCampaignService(
-        campaign_repository=campaign_repository
-    )
+    # Create service
+    return DefaultCampaignService(campaign_repository)
 
-def create_campaign_service(config: Optional[Dict[str, Any]] = None) -> CampaignService:
+def create_campaign_service() -> CampaignService:
     """
     Create a campaign service instance synchronously.
-    Legacy method that should be avoided in async contexts.
     
-    Args:
-        config: Optional service configuration
-        
+    This is a shortcut for testing/legacy code.
+    New code should use create_campaign_service_async directly.
+    
     Returns:
         Campaign service instance
     """
-    logger.info("Creating Campaign Service (sync method)")
-    
-    # Import repository module here to avoid circular imports
-    from ...db.repositories.campaign import create_campaign_repository
+    import asyncio
+    from asgiref.sync import async_to_sync
     
     # Check if we're in an async context
-    import asyncio
     if asyncio.get_event_loop().is_running():
-        logger.warning("Called sync create_campaign_service in async context - this may fail")
-        # Create dummy repository for now
+        logger.warning("Creating campaign service in async context using sync function - this may cause issues")
+        # For this to work correctly, we need to be inside an already running async context
+        
+        # Since we can't await in a sync function, we need to create a repository synchronously
         from ...db.repositories.campaign.implementations import PostgresCampaignRepository
-        campaign_repository = PostgresCampaignRepository(None)
+        campaign_repository = PostgresCampaignRepository(None)  # This is not ideal
     else:
-        # Use async_to_sync
-        from asgiref.sync import async_to_sync
+        # Not in async context, use async_to_sync
         try:
             campaign_repository = async_to_sync(create_campaign_repository)()
         except RuntimeError:
-            logger.error("Failed to create campaign repository with async_to_sync - using dummy")
+            # If we get here, we're probably in a thread with an event loop
+            logger.error("Failed to create repository with async_to_sync - creating dummy repository")
             from ...db.repositories.campaign.implementations import PostgresCampaignRepository
             campaign_repository = PostgresCampaignRepository(None)
     
-    # Create and return service
-    return DefaultCampaignService(
-        campaign_repository=campaign_repository
-    )
+    return DefaultCampaignService(campaign_repository)

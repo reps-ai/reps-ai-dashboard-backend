@@ -280,3 +280,19 @@ class PostgresCampaignRepository(CampaignRepository):
             await self.session.rollback()
             print(f"Error removing leads from campaign: {str(e)}")
             return False
+
+    async def get_call_ids_for_campaign(self, campaign_id: str) -> List[str]:
+        """
+        Get IDs of all calls associated with a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            
+        Returns:
+            List of call IDs
+        """
+        from ....models.call.call_log import CallLog
+        
+        query = select(CallLog.id).where(CallLog.campaign_id == campaign_id)
+        result = await self.session.execute(query)
+        return [str(row[0]) for row in result.all()]
