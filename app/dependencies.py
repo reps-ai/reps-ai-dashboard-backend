@@ -18,6 +18,9 @@ from backend.services.call.factory import create_call_service
 from backend.services.lead.implementation import DefaultLeadService
 from backend.db.repositories.lead.implementations import PostgresLeadRepository
 
+from backend.services.analytics.implementation import DefaultAnalyticsService
+from backend.services.analytics.factory import create_analytics_service
+
 # Add logger for better error handling
 logger = logging.getLogger(__name__)
 
@@ -168,5 +171,18 @@ async def get_lead_service(db: AsyncSession = Depends(get_db)) -> DefaultLeadSer
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error initializing lead service"
+        )
+
+async def get_analytics_service(db: AsyncSession = Depends(get_db)) -> DefaultAnalyticsService:
+    """
+    Dependency to get the analytics service instance.
+    """
+    try:
+        return create_analytics_service(db)
+    except Exception as e:
+        logger.error(f"Error creating analytics service: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error initializing analytics service"
         )
 
