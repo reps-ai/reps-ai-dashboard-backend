@@ -100,15 +100,55 @@ class CampaignService(ABC):
         pass
     
     @abstractmethod
-    async def list_campaigns(self, gym_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def list_campaigns(self, branch_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        List campaigns for a gym with optional filtering.
+        List campaigns for a branch with optional filtering.
         
         Args:
-            gym_id: ID of the gym
+            branch_id: ID of the branch
             filters: Optional filters for the campaigns
             
         Returns:
             List of campaigns matching the criteria
         """
-        pass 
+        pass
+
+    @abstractmethod
+    async def increment_call_count(self, campaign_id: str, count: int = 1) -> Dict[str, Any]:
+        """
+        Increment the call count for a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            count: Number to increment by (default 1)
+            
+        Returns:
+            Updated campaign data
+        """
+        pass
+
+    @abstractmethod
+    async def cancel_campaign(self, campaign_id: str) -> Dict[str, Any]:
+        """
+        Cancel a campaign and revoke any scheduled tasks.
+        
+        Args:
+            campaign_id: ID of the campaign to cancel
+            
+        Returns:
+            Updated campaign data with cancelled status
+        """
+        pass
+
+    @abstractmethod
+    async def get_campaign_leads(self, campaign_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all leads associated with a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            
+        Returns:
+            List of leads for the campaign
+        """
+        pass

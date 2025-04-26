@@ -17,15 +17,16 @@ logger = get_logger(__name__)
 
 async def get_campaign_with_related_data(session: AsyncSession, campaign_id: str) -> Optional[Dict[str, Any]]:
     """
-    Get a campaign with all related data.
+    Get campaign with related data using the provided session.
     
     Args:
-        session: Database session
-        campaign_id: Campaign ID
+        session: Database session to use - MUST be the shared session
+        campaign_id: ID of the campaign
         
     Returns:
-        Campaign data with related information or None if not found
+        Dictionary containing campaign details and related data
     """
+    # Important: Use the provided session, don't create a new one
     query = select(FollowUpCampaign).where(FollowUpCampaign.id == campaign_id)
     result = await session.execute(query)
     campaign = result.unique().scalar_one_or_none()

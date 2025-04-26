@@ -170,4 +170,31 @@ class CampaignRepository(ABC):
         Returns:
             Updated schedule data if successful, None if campaign not found
         """
-        pass 
+        pass
+
+    @abstractmethod
+    async def get_call_ids_for_campaign(self, campaign_id: str) -> List[str]:
+        """
+        Get IDs of all calls associated with a campaign.
+        
+        Args:
+            campaign_id: ID of the campaign
+            
+        Returns:
+            List of call IDs
+        """
+        pass
+
+    @abstractmethod
+    async def filter_campaigns_by_branch(self, branch_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Get all campaigns for a branch with SQL-level filtering.
+
+        Args:
+            branch_id: ID of the branch
+            filters: Optional filters for the campaigns
+
+        Returns:
+            List of campaigns matching the criteria
+        """
+        pass

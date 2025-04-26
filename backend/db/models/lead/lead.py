@@ -51,6 +51,7 @@ class Lead(Base):
     preferred_training_type = Column(Text, nullable=True)
     availability = Column(Text, nullable=True)
     medical_conditions = Column(Text, nullable=True)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("follow_up_campaigns.id"), nullable=True)
     
     def to_dict(self):
         """Convert the model instance to a dictionary."""
@@ -88,7 +89,8 @@ class Lead(Base):
             "specific_health_goals": self.specific_health_goals,
             "preferred_training_type": self.preferred_training_type,
             "availability": self.availability,
-            "medical_conditions": self.medical_conditions
+            "medical_conditions": self.medical_conditions,
+            "campaign_id": self.campaign_id
         }
 
 # Import dependent models to ensure registration
@@ -112,4 +114,4 @@ Lead.appointments = relationship("Appointment", back_populates="lead")
 Lead.member = relationship("Member", back_populates="lead", uselist=False)
 Lead.tags = relationship("Tag", secondary="lead_tag", back_populates="leads")
 Lead.follow_up_calls = relationship("FollowUpCall", back_populates="lead")
-Lead.follow_up_campaigns = relationship("FollowUpCampaign", back_populates="lead")
+Lead.follow_up_campaign = relationship("FollowUpCampaign", foreign_keys=[Lead.campaign_id], back_populates="leads")

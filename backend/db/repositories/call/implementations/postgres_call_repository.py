@@ -601,6 +601,54 @@ class PostgresCallRepository(CallRepository):
             }
         }
 
+    async def get_scheduled_calls_by_date_range(
+        self, 
+        branch_id: str,
+        start_date: datetime, 
+        end_date: datetime,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get scheduled calls within a date range.
+        
+        Args:
+            branch_id: ID of the branch
+            start_date: Start date for the range
+            end_date: End date for the range
+            page: Page number 
+            page_size: Page size
+            
+        Returns:
+            Dictionary with calls and pagination info
+        """
+        try:
+            # For now, just reuse the existing method and filter post-query
+            # A more efficient implementation would filter at database level
+            calls_result = await self.get_calls_by_date_range(
+                branch_id, start_date, end_date, page, page_size
+            )
+            
+            # Filter to only scheduled calls
+            calls = calls_result.get("calls", [])
+            scheduled_calls = [call for call in calls if call.get("call_status") == "scheduled"]
+            
+            return {
+                "calls": scheduled_calls,
+                "total": len(scheduled_calls),
+                "page": page,
+                "page_size": page_size
+            }
+        except Exception as e:
+            # Log error but return empty result set instead of failing
+            print(f"Error retrieving scheduled calls: {str(e)}")
+            return {
+                "calls": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size
+            }
+
     # Stub implementations for abstract methods we're not using yet
     
     async def get_active_calls(self, gym_id: str) -> List[Dict[str, Any]]:

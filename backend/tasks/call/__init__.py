@@ -1,16 +1,10 @@
 """
-Call processing tasks package.
+Call task package.
+
+This module exports background tasks for call-related operations.
 """
-from .call_processing import (
-    process_call_completion,
-    analyze_call_transcript,
-    schedule_calls_for_campaign,
-    generate_call_reports
-)
+from .task_definitions import trigger_call_task
 
 __all__ = [
-    'process_call_completion',
-    'analyze_call_transcript',
-    'schedule_calls_for_campaign',
-    'generate_call_reports'
-] 
+    'trigger_call_task',
+]

@@ -64,7 +64,7 @@ def get_redis_client():
     # If we get here, we need to initialize or reinitialize
     if redis_client is None:
         # Try to get the URL from environment if available
-        redis_url = os.environ.get("_REDIS_INTERNAL_URL", "redis://localhost:6379/0")
+        redis_url = os.environ.get("_REDIS_INTERNAL_URL", "redis://redis:6379/0")  # <-- FIXED DEFAULT
         logger.warning(f"Redis client not initialized. Attempting to connect with URL: {redis_url}")
         try:
             # Try to initialize with saved or default settings
@@ -75,4 +75,4 @@ def get_redis_client():
             logger.error(f"Failed to reinitialize Redis client: {str(e)}")
             return None
     
-    return redis_client 
+    return redis_client

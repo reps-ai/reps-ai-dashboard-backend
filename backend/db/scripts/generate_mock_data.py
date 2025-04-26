@@ -48,7 +48,7 @@ def create_mock_data():
         trans = conn.begin()
 
         # Delete all existing data first
-        delete_all_data(conn)
+        #delete_all_data(conn)
         
         # Create mock gyms
         print("Creating mock gyms...")
@@ -535,18 +535,61 @@ def create_follow_up_campaigns(conn, gym_ids, branch_ids, lead_ids, n=3):
         campaign_ids.append(campaign_id)
         gym_id = random.choice(gym_ids)
         branch_id = random.choice(branch_ids)
-        lead_id = random.choice(lead_ids)
+        # Remove lead_id from here since it's now moved to the leads table
         name = f"{fake.word()} Campaign"
         description = fake.text(max_nb_chars=150)
         start_date = datetime.now() - timedelta(days=random.randint(1,10))
         end_date = datetime.now() + timedelta(days=random.randint(10,30))
-        frequency = random.randint(1,7)
+        
+        # Change frequency to a non-zero value between 3 and 10
+        frequency = random.randint(3, 10)  # Previously was random.randint(1,7)
+        
         gap = random.randint(1,3)
-        campaign_status = random.choice(["active", "completed", "paused", "cancelled"])
+        
+        # Update with proper campaign status values
+        campaign_status = random.choice(["not_started", "active", "paused", "cancelled", "completed"])
+        
+        # Add call_count and metrics fields
+        call_count = random.randint(0, frequency//2)  # Make sure call_count is less than frequency
+        
+        # Create a mock metrics JSON object
+        metrics = {
+            "scheduled_calls": call_count,
+            "completed_calls": random.randint(0, call_count),
+            "last_scheduled_date": (datetime.now() - timedelta(days=random.randint(1,5))).strftime("%Y-%m-%d"),
+            # Add schedule information
+            "schedule": {
+                "max_daily_calls": random.randint(2, 5),
+                "call_days": random.sample(["mon", "tue", "wed", "thu", "fri"], k=random.randint(1, 5))
+            }
+        }
+        metrics_json = json.dumps(metrics)
+        
         conn.execute(text(f"""
-        INSERT INTO follow_up_campaigns (id, lead_id, gym_id, branch_id, name, description, start_date, end_date, frequency, gap, campaign_status, created_at)
-        VALUES ('{campaign_id}', '{lead_id}', '{gym_id}', '{branch_id}', '{name}', '{description}', '{start_date.strftime("%Y-%m-%d %H:%M:%S")}', '{end_date.strftime("%Y-%m-%d %H:%M:%S")}', {frequency}, {gap}, '{campaign_status}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' )
+        INSERT INTO follow_up_campaigns (
+            id, gym_id, branch_id, name, description, start_date, end_date, 
+            frequency, gap, campaign_status, call_count, metrics, created_at
+        )
+        VALUES (
+            '{campaign_id}', '{gym_id}', '{branch_id}', '{name}', '{description}', 
+            '{start_date.strftime("%Y-%m-%d %H:%M:%S")}', '{end_date.strftime("%Y-%m-%d %H:%M:%S")}', 
+            {frequency}, {gap}, '{campaign_status}', {call_count}, '{metrics_json}', 
+            '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}' 
+        )
         """))
+        
+        # Assign 1-5 random leads to this campaign
+        num_leads = random.randint(1, 5)
+        selected_leads = random.sample(lead_ids, min(num_leads, len(lead_ids)))
+        
+        for lead_id in selected_leads:
+            # Update lead to reference the campaign
+            conn.execute(text(f"""
+            UPDATE leads 
+            SET campaign_id = '{campaign_id}'
+            WHERE id = '{lead_id}'
+            """))
+    
     return campaign_ids
 
 def create_knowledge_base(conn, gym_ids, branch_ids, n=3):

@@ -146,6 +146,30 @@ class CallService(ABC):
         pass
     
     @abstractmethod
+    async def get_scheduled_calls_by_date_range(
+        self, 
+        branch_id: str,
+        start_date: datetime, 
+        end_date: datetime,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get scheduled calls (not yet started) within a date range.
+        
+        Args:
+            branch_id: ID of the branch
+            start_date: Start date for the range
+            end_date: End date for the range
+            page: Page number (default 1)
+            page_size: Page size (default 50)
+            
+        Returns:
+            Dictionary with calls and pagination info
+        """
+        pass
+    
+    @abstractmethod
     async def process_webhook_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a webhook event from the call provider.

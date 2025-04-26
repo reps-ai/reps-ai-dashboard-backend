@@ -18,6 +18,9 @@ from backend.services.call.factory import create_call_service
 from backend.services.lead.implementation import DefaultLeadService
 from backend.db.repositories.lead.implementations import PostgresLeadRepository
 
+from backend.services.campaign.factory import create_campaign_service_async
+from backend.services.campaign.implementation import DefaultCampaignService
+
 # Add logger for better error handling
 logger = logging.getLogger(__name__)
 
@@ -168,5 +171,19 @@ async def get_lead_service(db: AsyncSession = Depends(get_db)) -> DefaultLeadSer
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error initializing lead service"
+        )
+
+async def get_campaign_service(db: AsyncSession = Depends(get_db)) -> DefaultCampaignService:
+    """
+    Dependency to get the campaign service instance with properly initialized repository.
+    """
+    try:
+        campaign_service = await create_campaign_service_async(session=db)
+        return campaign_service
+    except Exception as e:
+        logger.error(f"Error creating campaign service: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error initializing campaign service"
         )
 

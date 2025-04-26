@@ -8,7 +8,7 @@ import logging
 import asyncio
 from fastapi_mcp import FastApiMCP
 
-from app.routes import auth, leads, calls, cache_diagnostics
+from app.routes import auth, leads, calls, cache_diagnostics, campaigns
 
 # Set up logging
 logging.basicConfig(
@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger("main")
 
 # Get Redis URL from environment variable or use default
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")  # <-- FIXED DEFAULT
 
 app = FastAPI(
     title="Gym AI Voice Agent API",
@@ -67,6 +67,7 @@ else:
 app.include_router(auth.router)
 app.include_router(leads.router)
 app.include_router(calls.router)
+app.include_router(campaigns.router)  # Add campaigns router
 app.include_router(cache_diagnostics.router)  # Add cache diagnostics routes
 
 

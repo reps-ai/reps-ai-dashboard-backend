@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 from .interface import RetellIntegration
 from .implementation import RetellImplementation
 from ...utils.logging.logger import get_logger
+import os
 
 logger = get_logger(__name__)
 
@@ -22,7 +23,6 @@ def create_retell_integration(
     """
     logger.info("Creating Retell Integration")
     
-    # Environment variables verification is done in the implementation constructor
     try:
         # Create and return the integration
         integration = RetellImplementation()
@@ -30,4 +30,9 @@ def create_retell_integration(
         return integration
     except Exception as e:
         logger.error(f"Failed to create Retell integration: {str(e)}")
-        raise 
+        import traceback
+        logger.error(traceback.format_exc())
+        # Print to stdout for Docker logs as well
+        print("Failed to create Retell integration:", str(e))
+        print(traceback.format_exc())
+        raise

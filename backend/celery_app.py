@@ -37,10 +37,13 @@ def create_celery_app(settings: CelerySettings = None) -> Celery:
     )
     
     # Auto-discover tasks in the specified packages
-    app.autodiscover_tasks(["backend.tasks.lead", 
-                           "backend.tasks.reports", 
-                           "backend.tasks.notifications",
-                           "backend.tasks.call"])
+    app.autodiscover_tasks([
+        "backend.tasks.lead", 
+        "backend.tasks.reports", 
+        "backend.tasks.notifications",
+        "backend.tasks.call",
+        "backend.tasks.campaign"  # Add campaign tasks
+    ])
     
     return app
 
@@ -49,4 +52,4 @@ def create_celery_app(settings: CelerySettings = None) -> Celery:
 app = create_celery_app()
 
 if __name__ == '__main__':
-    app.start() 
+    app.start()

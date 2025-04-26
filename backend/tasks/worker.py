@@ -21,7 +21,7 @@ def check_redis():
     """
     try:
         # Simple check to see if we can connect to Redis
-        broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+        broker_url = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")  # <-- FIXED DEFAULT
         
         # If we're using a different broker, skip Redis check
         if not broker_url.startswith("redis://"):
@@ -91,4 +91,4 @@ if __name__ == '__main__':
         loglevel = os.getenv('WORKER_LOGLEVEL')
     
     # Start the worker
-    start_worker(queue=queue, concurrency=concurrency, loglevel=loglevel) 
+    start_worker(queue=queue, concurrency=concurrency, loglevel=loglevel)

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .interface import LeadService
 from .implementation import DefaultLeadService
 from ...db.repositories.lead import LeadRepository
+from ...db.repositories.lead import create_lead_repository
 from ...db.repositories.lead.implementations import PostgresLeadRepository
 
 class LeadServiceFactory:
@@ -24,8 +25,8 @@ class LeadServiceFactory:
         Returns:
             Lead service instance
         """
-        # Create repository
-        lead_repository = PostgresLeadRepository(session)
+        # Create repository with the provided session instead of creating a new one
+        lead_repository = await create_lead_repository(session=session)
         
         # Create service
-        return DefaultLeadService(lead_repository) 
+        return DefaultLeadService(lead_repository)

@@ -239,6 +239,38 @@ class DefaultCallService(CallService):
             logger.error(f"Error retrieving calls by date range for branch {branch_id}: {str(e)}")
             raise ValueError(f"Error retrieving calls by date range: {str(e)}")
 
+    async def get_scheduled_calls_by_date_range(
+        self, 
+        branch_id: str,
+        start_date: datetime, 
+        end_date: datetime,
+        page: int = 1,
+        page_size: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get scheduled calls within a date range.
+        
+        Args:
+            branch_id: ID of the branch
+            start_date: Start date for the range
+            end_date: End date for the range
+            page: Page number 
+            page_size: Page size
+            
+        Returns:
+            Dictionary with calls and pagination info
+        """
+        logger.info(f"Getting scheduled calls for branch {branch_id} from {start_date} to {end_date}")
+        
+        try:
+            # Use the repository to get scheduled calls
+            return await self.call_repository.get_scheduled_calls_by_date_range(
+                branch_id, start_date, end_date, page, page_size
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving scheduled calls for branch {branch_id}: {str(e)}")
+            return {"calls": [], "total": 0, "page": page, "page_size": page_size}
+
     async def get_filtered_calls(
         self, 
         branch_id: str,  # Changed from gym_id to branch_id
@@ -341,16 +373,6 @@ class DefaultCallService(CallService):
             logger.error(f"Error deleting call {call_id}: {str(e)}")
             raise ValueError(f"Error deleting call: {str(e)}")
 
-
-
-
-
-
-
-
-
-    """Optional Beyond This point."""
-    #Optional
     async def process_webhook_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process a webhook event from the call provider.
@@ -419,6 +441,17 @@ class DefaultCallService(CallService):
                         "transcript": transcript
                     }
                     updated_call = await self.call_repository.update_call(call_id, update_data)
+                    
+                    # If this call is associated with a campaign, increment the campaign's call count
+                    if campaign_id := updated_call.get("campaign_id"):
+                        try:
+                            from ...services.campaign.factory import create_campaign_service
+                            campaign_service = create_campaign_service()
+                            await campaign_service.increment_call_count(campaign_id)
+                            logger.info(f"Incremented call count for campaign {campaign_id}")
+                        except Exception as e:
+                            logger.error(f"Failed to increment campaign call count: {str(e)}")
+                    
                     return {"status": "success", "call": updated_call}
                 
                 elif event_type == "call.analyzed":
@@ -476,6 +509,17 @@ class DefaultCallService(CallService):
                 "duration": duration
             }
             updated_call = await self.call_repository.update_call(call_id, update_data)
+            
+            # If this call is associated with a campaign, increment the campaign's call count
+            if campaign_id := updated_call.get("campaign_id"):
+                try:
+                    from ...services.campaign.factory import create_campaign_service
+                    campaign_service = create_campaign_service()
+                    await campaign_service.increment_call_count(campaign_id)
+                    logger.info(f"Incremented call count for campaign {campaign_id}")
+                except Exception as e:
+                    logger.error(f"Failed to increment campaign call count: {str(e)}")
+            
             return {"status": "success", "call": updated_call}
         
         elif event_type == "call.recording":
