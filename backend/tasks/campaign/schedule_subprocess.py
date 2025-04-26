@@ -230,7 +230,81 @@ async def schedule_campaign_calls(
                     logger.warning(msg)
                     diagnostics["reason_no_calls"] = msg
                 
-                # If none of the above, it's likely lead qualification issues
+                # If none of the above campaign-level issues, analyze each lead
+                if "reason_no_calls" not in diagnostics and leads:
+                    # Initialize lead-specific diagnostics
+                    lead_diagnostics = []
+                    
+                    # Go through each lead and check why they weren't qualified
+                    for lead in leads:
+                        lead_id = lead.get('id')
+                        lead_status = lead.get('lead_status', 'unknown')
+                        
+                        # Create a diagnostic record for this lead
+                        lead_diag = {
+                            "lead_id": str(lead_id),
+                            "name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}",
+                            "status": lead_status,
+                            "disqualification_reason": None
+                        }
+                        
+                        # Check status - typically only 'new' leads should be called
+                        if lead_status not in ['new', 'callback']:
+                            lead_diag["disqualification_reason"] = f"Lead status '{lead_status}' not eligible for calls (must be 'new' or 'callback')"
+                            lead_diagnostics.append(lead_diag)
+                            continue
+                        
+                        # Check if lead was recently called (within gap days)
+                        last_called = lead.get('last_called')
+                        if last_called:
+                            # Calculate days since last call
+                            try:
+                                if isinstance(last_called, str):
+                                    last_call_date = datetime.fromisoformat(last_called).date()
+                                else:
+                                    last_call_date = last_called.date()
+                                
+                                days_since_call = (target_date - last_call_date).days
+                                gap = campaign.get('gap', 1)  # Default gap of 1 day
+                                
+                                if days_since_call < gap:
+                                    lead_diag["disqualification_reason"] = f"Lead was called recently ({days_since_call} days ago, gap is {gap} days)"
+                                    lead_diagnostics.append(lead_diag)
+                                    continue
+                            except Exception as e:
+                                logger.error(f"Error calculating days since last call: {str(e)}")
+                        
+                        # Add any other disqualification checks here
+                        # ...
+                        
+                        # If we got here and no disqualification reason was set,
+                        # there must be some other reason not covered by our checks
+                        if not lead_diag["disqualification_reason"]:
+                            lead_diag["disqualification_reason"] = "Unknown disqualification reason"
+                        
+                        lead_diagnostics.append(lead_diag)
+                    
+                    # Add lead diagnostics to the overall diagnostics
+                    diagnostics["lead_diagnostics"] = lead_diagnostics
+                    
+                    # Set the overall reason based on lead diagnostics
+                    disqualification_counts = {}
+                    for ld in lead_diagnostics:
+                        reason = ld["disqualification_reason"]
+                        if reason:
+                            disqualification_counts[reason] = disqualification_counts.get(reason, 0) + 1
+                    
+                    # Find the most common reason
+                    most_common_reason = max(disqualification_counts.items(), key=lambda x: x[1], default=(None, 0))
+                    if most_common_reason[0]:
+                        msg = f"No leads qualified for calls: {most_common_reason[0]} ({most_common_reason[1]} leads)"
+                    else:
+                        msg = "No leads qualified for calls today - check lead statuses or campaign qualification criteria"
+                    
+                    logger.warning(msg)
+                    diagnostics["reason_no_calls"] = msg
+                
+                # If we still don't have a reason (shouldn't happen), use the generic message
                 if "reason_no_calls" not in diagnostics:
                     msg = "No leads qualified for calls today - check lead statuses or campaign qualification criteria"
                     logger.warning(msg)

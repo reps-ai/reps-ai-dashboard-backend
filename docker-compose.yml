@@ -54,6 +54,8 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     command: celery -A backend.celery_app.app worker -Q call_tasks -l DEBUG -c 2
+    env_file:
+      - .env
     volumes:
       - .:/app
     environment:
