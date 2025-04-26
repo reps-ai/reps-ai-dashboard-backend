@@ -33,6 +33,19 @@ async def schedule_campaign_calls(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Campaign with ID {campaign_id} not found"
             )
+        
+        # Make sure we have the Retell integration available in the API container
+        call_service = getattr(campaign_service, "call_service", None)
+        if not call_service or not getattr(call_service, "retell_integration", None):
+            # For debugging: log what's missing or going wrong
+            logger.error(f"Retell integration check failed: call_service={call_service is not None}, " +
+                         f"retell_integration={getattr(call_service, 'retell_integration', None) is not None if call_service else 'N/A'}")
+            
+            # Return a clear error message
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Retell integration is not available. Cannot schedule calls. Check API container environment variables."
+            )
             
         # Use current date if not specified
         if not target_date:

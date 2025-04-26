@@ -3,9 +3,11 @@ PostgreSQL implementation of the campaign repository.
 """
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
+from fastapi import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert, update, delete, and_, or_, func
 import json
+
 
 from ..campaign_repository import CampaignRepository
 from ....models.campaign.follow_up_campaign import FollowUpCampaign
@@ -32,12 +34,17 @@ class PostgresCampaignRepository(CampaignRepository):
         return campaign.to_dict()
 
     async def get_campaign_by_id(self, campaign_id: str) -> Optional[Dict[str, Any]]:
-        """Get campaign details by ID."""
-        query = select(FollowUpCampaign).where(FollowUpCampaign.id == campaign_id)
-        result = await self.session.execute(query)
-        if campaign := result.scalar_one_or_none():
-            return campaign.to_dict()
-        return None
+        """Get campaign details by ID with better error handling."""
+        try:
+            query = select(FollowUpCampaign).where(FollowUpCampaign.id == campaign_id)
+            result = await self.session.execute(query)
+            if campaign := result.scalar_one_or_none():
+                return campaign.to_dict()
+            return None
+        except Exception as e:
+            # Log the error with the specific campaign ID
+            logger.error(f"Error in get_campaign_by_id for campaign {campaign_id}: {str(e)}")
+            raise  # Re-raise to be handled by the service layer
 
     async def update_campaign(self, campaign_id: str, campaign_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update campaign details."""

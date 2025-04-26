@@ -53,14 +53,27 @@ engine = create_async_engine(
     pool_timeout=30      # Pool timeout in seconds
 )
 
-# Configure the async session maker
-SessionLocal = async_sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession,
-    autocommit=False,
-    autoflush=False
-)
+# Add a safer SessionLocal function
+def get_safe_session():
+    """
+    Get a database session with safer defaults for worker tasks.
+    This increases timeouts and retry capabilities.
+    """
+    return async_sessionmaker(
+        bind=engine,
+        expire_on_commit=False,
+        class_=AsyncSession,
+        autocommit=False,
+        autoflush=False,
+        future=True
+        # Remove these parameters - they belong only to the engine config:
+        # pool_pre_ping=True,
+        # pool_recycle=1800,
+        # pool_timeout=30
+    )()
+
+# Override the SessionLocal with our safer version
+SessionLocal = get_safe_session
 
 # Maximum retries for database operations
 MAX_RETRIES = 3

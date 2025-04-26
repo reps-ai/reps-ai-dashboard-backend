@@ -192,12 +192,46 @@ async def patch_campaign(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Campaign not found or does not belong to your gym"
             )
+            
         # Convert Pydantic model to dictionary, excluding unset fields
         campaign_data = campaign.dict(exclude_unset=True)
+        
+        # Debug logging
+        logger.info(f"PATCH campaign data before processing: {campaign_data}")
+        
+        # Handle metrics field specifically to avoid nesting issues
+        if "metrics" in campaign_data:
+            # Get current metrics to ensure we don't lose existing data
+            current_metrics = existing_campaign.get("metrics", {}) or {}
+            new_metrics = campaign_data["metrics"]
+            
+            # Handle the case where client sends a nested structure
+            if isinstance(new_metrics, dict):
+                # If it contains a schedule key, we need to merge it properly
+                if "schedule" in new_metrics:
+                    # Ensure current_metrics has a schedule dict
+                    if "schedule" not in current_metrics:
+                        current_metrics["schedule"] = {}
+                    
+                    # Update the schedule with new values
+                    current_metrics["schedule"].update(new_metrics["schedule"])
+                    
+                # Update any other metrics keys
+                for key, value in new_metrics.items():
+                    if key != "schedule":  # We've already handled schedule specially
+                        current_metrics[key] = value
+                
+                # Set the merged metrics back to campaign_data
+                campaign_data["metrics"] = current_metrics
+            
+            # Log the processed metrics for debugging
+            logger.info(f"Processed metrics: {campaign_data['metrics']}")
+        
         # Update the campaign
         updated_campaign = await campaign_service.update_campaign(campaign_id, campaign_data)
         updated_campaign = convert_campaign_uuids_to_str(updated_campaign)
         return updated_campaign
+        
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

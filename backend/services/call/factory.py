@@ -2,6 +2,7 @@
 Factory for creating Call Service instances.
 """
 from typing import Optional, Dict, Any
+from sqlalchemy.ext.asyncio import AsyncSession
 from .interface import CallService
 from .implementation import DefaultCallService
 from ...db.repositories.call import CallRepository
@@ -12,7 +13,8 @@ logger = get_logger(__name__)
 
 async def create_call_service_async(
     call_repository: Optional[CallRepository] = None,
-    config: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None,
+    session: Optional[AsyncSession] = None  # Add session parameter
 ) -> CallService:
     """
     Create a Call Service instance asynchronously.
@@ -20,6 +22,7 @@ async def create_call_service_async(
     Args:
         call_repository: Optional repository for call operations
         config: Optional configuration for the service
+        session: Optional database session to use
         
     Returns:
         An instance of CallService
@@ -29,7 +32,11 @@ async def create_call_service_async(
     # Create call repository if not provided
     if not call_repository:
         from ...db.repositories.call import create_call_repository
-        call_repository = await create_call_repository()
+        # Only pass session if explicitly provided, otherwise let repository create its own
+        if session:
+            call_repository = await create_call_repository(session=session)
+        else:
+            call_repository = await create_call_repository()
     
     # Get configuration for retell integration if available
     enable_retell = config.get("enable_retell", True) if config else True

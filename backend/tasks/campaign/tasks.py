@@ -33,7 +33,9 @@ class CampaignSchedulingService:
         self, 
         campaign_id: str, 
         target_date: Optional[date] = None,
-        get_session=None
+        campaign_service = None,
+        call_service = None,
+        session = None
     ) -> List[Dict[str, Any]]:
         """
         Schedule calls for a campaign on a specific date.
@@ -41,7 +43,9 @@ class CampaignSchedulingService:
         Args:
             campaign_id: ID of the campaign
             target_date: Date to schedule calls for (defaults to today)
-            get_session: Function to provide a database session
+            campaign_service: Optional pre-created campaign service
+            call_service: Optional pre-created call service
+            session: Optional database session
             
         Returns:
             List of scheduled calls
@@ -51,23 +55,38 @@ class CampaignSchedulingService:
             
         logger.info(f"Scheduling calls for campaign {campaign_id} on {target_date}")
         
-        # Use the provided session factory or fall back to our custom db_session context manager
-        if get_session is None:
-            get_session = db_session
-        
-        async with get_session() as session:
-            # Create service instances with proper repositories
-            from ...services.campaign.factory import create_campaign_service_async
-            from ...services.call.factory import create_call_service_async
-            
-            campaign_service = await create_campaign_service_async()
-            call_service = await create_call_service_async()
-            
-            # 1. Get the campaign details
-            campaign = await campaign_service.get_campaign(campaign_id)
-            if not campaign:
-                logger.error(f"Campaign {campaign_id} not found")
-                return []
+        # Get a database session if not provided - CRITICAL that we don't create multiple sessions
+        if session is None:
+            # Use context manager to ensure session is closed properly
+            async with db_session() as db_sess:
+                return await self._do_schedule_calls_for_campaign(
+                    campaign_id, target_date, campaign_service, call_service, db_sess
+                )
+        else:
+            # Use the provided session directly
+            return await self._do_schedule_calls_for_campaign(
+                campaign_id, target_date, campaign_service, call_service, session
+            )
+
+    async def _do_schedule_calls_for_campaign(
+        self, 
+        campaign_id: str, 
+        target_date: date,
+        campaign_service,
+        call_service,
+        session
+    ) -> List[Dict[str, Any]]:
+        """Internal method that does the actual campaign scheduling with a valid session."""
+        try:
+            # 1. Get the campaign details - wrap this in its own try/except
+            try:
+                campaign = await campaign_service.get_campaign(campaign_id)
+                if not campaign:
+                    logger.error(f"Campaign {campaign_id} not found")
+                    return []
+            except Exception as campaign_error:
+                logger.error(f"Error retrieving campaign {campaign_id}: {str(campaign_error)}")
+                raise ValueError(f"Failed to retrieve campaign: {str(campaign_error)}")
             
             # Debug output the actual campaign data to understand why frequency is 0
             logger.info(f"Campaign details: frequency={campaign.get('frequency')}, type={type(campaign.get('frequency'))}")
@@ -202,7 +221,7 @@ class CampaignSchedulingService:
                 call_service, 
                 campaign, 
                 campaign_id, 
-                session, 
+                session,  # Explicitly pass the session
                 target_date, 
                 calls_to_schedule
             )
@@ -246,6 +265,9 @@ class CampaignSchedulingService:
             
             logger.info(f"Scheduled {len(scheduled_calls)} calls for campaign {campaign_id}")
             return scheduled_calls
+        except Exception as e:
+            logger.error(f"Error in _do_schedule_calls_for_campaign: {str(e)}")
+            raise
 
     async def _schedule_campaign_leads(
         self,
@@ -253,12 +275,14 @@ class CampaignSchedulingService:
         call_service,
         campaign,
         campaign_id,
-        session,
+        session,  # Make sure session is a parameter
         target_date,
         calls_to_schedule
     ) -> List[Dict[str, Any]]:
         """
         Helper method to schedule leads for a campaign.
+        
+        IMPORTANT: All services created in this method must use the shared session!
         """
         # First get all leads associated with the campaign
         campaign_leads = await campaign_service.get_campaign_leads(campaign_id)
@@ -334,12 +358,13 @@ class CampaignSchedulingService:
         # No code in this file expects 'id' from scheduled_calls, only 'task_id' is used for tracking/revocation.
         return scheduled_calls
 
-    async def schedule_calls_for_all_campaigns(self, target_date: Optional[date] = None) -> Dict[str, List[Dict[str, Any]]]:
+    async def schedule_calls_for_all_campaigns(self, target_date: Optional[date] = None, get_session=None) -> Dict[str, List[Dict[str, Any]]]:
         """
         Schedule calls for all active campaigns on a specific date.
         
         Args:
             target_date: Date to schedule calls for (defaults to today)
+            get_session: Function to provide a database session
             
         Returns:
             Dictionary mapping campaign IDs to lists of scheduled calls
@@ -349,8 +374,11 @@ class CampaignSchedulingService:
             
         logger.info(f"Scheduling calls for all active campaigns on {target_date}")
         
-        # Use our new db_session context manager instead of get_db directly
-        async with db_session() as session:
+        # Use the provided session factory or fall back to our custom db_session context manager
+        if get_session is None:
+            get_session = db_session
+        
+        async with get_session() as session:
             # Use the async campaign service
             from ...services.campaign.factory import create_campaign_service_async
             campaign_service = await create_campaign_service_async()

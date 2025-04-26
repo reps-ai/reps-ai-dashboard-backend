@@ -1,14 +1,19 @@
 """
 Implementation of the Campaign Management Service.
 """
+# Add at the beginning of the file for debugging
+import os
+
 from typing import List, Dict, Any, Optional
-from datetime import datetime, date, timedelta
-import uuid
+from datetime import datetime, timedelta
 import json
+import uuid
+import asyncio
 
 from .interface import CampaignService
 from ...db.repositories.campaign import CampaignRepository
 from ...utils.logging.logger import get_logger
+from ...celery_app import app
 
 logger = get_logger(__name__)
 
@@ -25,7 +30,21 @@ class DefaultCampaignService(CampaignService):
             campaign_repository: Repository for campaign operations
         """
         self.campaign_repository = campaign_repository
-    
+        self.call_service = None  # Will be set by the factory
+        
+    # Add setter method to explicitly set the call service
+    def set_call_service(self, call_service):
+        """
+        Set the call service for this campaign service.
+        
+        Args:
+            call_service: Call service instance
+        """
+        self.call_service = call_service
+        has_retell = hasattr(call_service, 'retell_integration') and call_service.retell_integration is not None
+        logger.info(f"Campaign service call_service set with Retell integration: {has_retell}")
+        print(f"DEBUG - Campaign service call_service set with Retell integration: {has_retell}")
+
     async def create_campaign(self, campaign_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new call campaign.
@@ -80,39 +99,36 @@ class DefaultCampaignService(CampaignService):
     
     async def get_campaign(self, campaign_id: str) -> Dict[str, Any]:
         """
-        Get campaign details by ID.
+        Get campaign details by ID with better error handling.
         
         Args:
             campaign_id: ID of the campaign
             
         Returns:
             Dictionary containing campaign details
-            
-        Raises:
-            ValueError: If campaign not found or other error occurs
         """
+        logger.info(f"Getting campaign with ID: {campaign_id}")
+        
         try:
-            logger.info(f"Getting campaign with ID: {campaign_id}")
-            
             campaign = await self.campaign_repository.get_campaign_by_id(campaign_id)
             
             if not campaign:
                 logger.warning(f"Campaign with ID {campaign_id} not found")
                 raise ValueError(f"Campaign with ID {campaign_id} not found")
             
-            # Get schedule information
-            schedule = await self.campaign_repository.get_campaign_schedule(campaign_id)
-            if schedule:
-                campaign['schedule'] = schedule
-            
             return campaign
-            
-        except ValueError as ve:
-            # Re-raise the value errors with proper message
-            raise ve
+        except ValueError:
+            # Re-raise ValueError with same message
+            raise
         except Exception as e:
+            # Log the error but don't include the full traceback in the error message
             logger.error(f"Error retrieving campaign {campaign_id}: {str(e)}")
-            raise ValueError(f"Error retrieving campaign: {str(e)}")
+            
+            # Provide a cleaner error message
+            if "Event loop is closed" in str(e):
+                raise ValueError("Database connection error: Event loop was closed unexpectedly")
+            else:
+                raise ValueError(f"Error retrieving campaign: {str(e)}")
     
     async def update_campaign(self, campaign_id: str, campaign_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -204,7 +220,7 @@ class DefaultCampaignService(CampaignService):
     
     async def schedule_calls(self, campaign_id: str, target_date: datetime) -> List[Dict[str, Any]]:
         """
-        Schedule calls for a specific date based on campaign configuration.
+        Schedule calls for a campaign on a specific date.
         
         Args:
             campaign_id: ID of the campaign
@@ -212,10 +228,20 @@ class DefaultCampaignService(CampaignService):
             
         Returns:
             List of scheduled calls
-            
-        Raises:
-            ValueError: If campaign not found or other error occurs
         """
+        # First, check if we have a call service with Retell integration
+        if not self.call_service:
+            logger.error("No call service available for campaign scheduling")
+            raise ValueError("Call service not available")
+        
+        has_retell = hasattr(self.call_service, 'retell_integration') and self.call_service.retell_integration is not None
+        logger.info(f"Using call service with Retell integration: {has_retell}")
+        print(f"DEBUG - schedule_calls using call service with Retell integration: {has_retell}")
+        
+        if not has_retell:
+            logger.error("Retell integration not available for campaign scheduling")
+            raise ValueError("Retell integration is not available. Cannot schedule calls.")
+            
         try:
             logger.info(f"Scheduling calls for campaign {campaign_id} on {target_date}")
             
