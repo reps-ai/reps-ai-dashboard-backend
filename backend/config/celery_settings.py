@@ -40,6 +40,30 @@ class CelerySettings(BaseSettings):
             "schedule": crontab(minute="*/15"),
         },
         
+        # Check for scheduled reports (runs every minute)
+        "check-scheduled-reports": {
+            "task": "backend.tasks.reports.check_scheduled_reports",
+            "schedule": crontab(minute="*"),
+        },
+        
+        # Process pending reports (runs every 5 minutes)
+        "process-pending-reports": {
+            "task": "backend.tasks.reports.process_pending_reports",
+            "schedule": crontab(minute="*/5"),
+        },
+        
+        # Generate daily lead reports (runs at 1:00 AM)
+        "generate-daily-lead-reports": {
+            "task": "backend.tasks.reports.generate_daily_lead_report",
+            "schedule": crontab(hour=1, minute=0),
+        },
+        
+        # Generate weekly lead reports (runs at 2:00 AM on Mondays)
+        "generate-weekly-lead-reports": {
+            "task": "backend.tasks.reports.generate_weekly_lead_report",
+            "schedule": crontab(hour=2, minute=0, day_of_week="monday"),
+        },
+        
         # Generate daily reports (runs at midnight)
         "generate-daily-reports": {
             "task": "backend.tasks.reports.tasks.generate_daily_call_report",

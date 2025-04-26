@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Daily Performance Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2, h3 {
+            color: #0066cc;
+        }
+        .header {
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #0066cc;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .metric-row {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .metric-card {
+            flex: 1;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 15px;
+            margin-right: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .metric-card:last-child {
+            margin-right: 0;
+        }
+        .metric-card h3 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .positive-change {
+            color: #28a745;
+        }
+        .negative-change {
+            color: #dc3545;
+        }
+        .neutral-change {
+            color: #6c757d;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Daily Performance Report</h1>
+        <p><strong>Period:</strong> {{ report_period.start.strftime('%B %d, %Y') }}</p>
+        <p><strong>Branch:</strong> {{ branch_name }}</p>
+    </div>
+
+    <div class="summary-card">
+        <h2>Executive Summary</h2>
+        <p>{{ summary.headline }}</p>
+    </div>
+
+    <div class="metric-row">
+        <div class="metric-card">
+            <h3>Total Leads</h3>
+            <div class="metric-value">{{ metrics.leads.status_distribution.values() | sum }}</div>
+        </div>
+        <div class="metric-card">
+            <h3>Conversion Rate</h3>
+            <div class="metric-value">{{ "%.1f"|format(metrics.leads.conversion_rate) }}%</div>
+        </div>
+        <div class="metric-card">
+            <h3>Pickup Rate</h3>
+            <div class="metric-value">{{ "%.1f"|format(insights.call_insights.pickup_rate) }}%</div>
+        </div>
+        <div class="metric-card">
+            <h3>Interest Rate</h3>
+            <div class="metric-value">{{ "%.1f"|format(insights.call_insights.interest_rate) }}%</div>
+        </div>
+    </div>
+
+    <h2>Lead Performance</h2>
+    <table>
+        <tr>
+            <th>Lead Status</th>
+            <th>Count</th>
+            <th>Percentage</th>
+        </tr>
+        {% set total_leads = metrics.leads.status_distribution.values() | sum %}
+        {% for status, count in metrics.leads.status_distribution.items() %}
+        <tr>
+            <td>{{ status | title }}</td>
+            <td>{{ count }}</td>
+            <td>{{ "%.1f"|format((count / total_leads * 100) if total_leads else 0) }}%</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h2>Call Performance</h2>
+    <table>
+        <tr>
+            <th>Metric</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Total Calls</td>
+            <td>{{ metrics.calls.call_volume }}</td>
+        </tr>
+        <tr>
+            <td>Answered Calls</td>
+            <td>{{ metrics.calls.answered_calls }}</td>
+        </tr>
+        <tr>
+            <td>Average Duration</td>
+            <td>{{ "%.1f"|format(metrics.calls.average_duration) }} seconds</td>
+        </tr>
+        <tr>
+            <td>Pickup Rate</td>
+            <td>{{ "%.1f"|format(insights.call_insights.pickup_rate) }}%</td>
+        </tr>
+    </table>
+
+    <h3>Call Outcomes</h3>
+    <table>
+        <tr>
+            <th>Outcome</th>
+            <th>Count</th>
+            <th>Percentage</th>
+        </tr>
+        {% set total_outcomes = insights.call_insights.outcomes.values() | sum %}
+        {% for outcome, count in insights.call_insights.outcomes.items() %}
+        <tr>
+            <td>{{ outcome | replace("_", " ") | title }}</td>
+            <td>{{ count }}</td>
+            <td>{{ "%.1f"|format((count / total_outcomes * 100) if total_outcomes else 0) }}%</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h2>Time of Day Analysis</h2>
+    <table>
+        <tr>
+            <th>Time Period</th>
+            <th>Lead Count</th>
+            <th>Call Count</th>
+            <th>Pickup Rate</th>
+        </tr>
+        {% for period, data in metrics.time_of_day.items() %}
+        <tr>
+            <td>{{ period | replace("_", " ") | title }}</td>
+            <td>{{ data.lead_count }}</td>
+            <td>{{ data.call_count }}</td>
+            <td>{{ "%.1f"|format(data.pickup_rate) }}%</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <div class="footer">
+        <p>This report was automatically generated on {{ generated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        <p>Reps.AI Dashboard</p>
+    </div>
+</body>
+</html>
