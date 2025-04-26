@@ -4,6 +4,10 @@ Celery task definitions for campaign operations.
 from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 import asyncio
+import json
+import subprocess
+import os
+import sys
 
 from sqlalchemy import text
 
@@ -22,6 +26,10 @@ TASK_DEFAULT_QUEUE = 'campaign_tasks'
 # Configure logging
 logger = get_logger(__name__)
 
+# Get the absolute path to the subprocess scripts
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+SUBPROCESS_SCRIPT = os.path.join(CURRENT_DIR, "schedule_subprocess.py")
+ALL_CAMPAIGNS_SUBPROCESS_SCRIPT = os.path.join(CURRENT_DIR, "schedule_all_subprocess.py")
 
 class ScheduleCampaignTask(BaseTask):
     """Task to schedule calls for a specific campaign."""
@@ -44,99 +52,91 @@ class ScheduleCampaignTask(BaseTask):
         """
         logger.info(f"Scheduling calls for campaign {campaign_id} on {target_date_str or 'today'}")
         
-        # Convert string date to date object if provided
-        if target_date_str:
-            try:
-                target_date = datetime.fromisoformat(target_date_str).date()
-            except ValueError:
-                logger.error(f"Invalid date format: {target_date_str}. Using today's date.")
-                target_date = date.today()
-        else:
-            target_date = date.today()
-            
         try:
-            # Create a fresh event loop that's properly isolated
-            old_loop = asyncio.get_event_loop() if asyncio.get_event_loop().is_running() else None
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Run the scheduling in a subprocess to guarantee clean event loop
+            args = [sys.executable, SUBPROCESS_SCRIPT, campaign_id]
             
-            try:
-                # Run our async function and capture the result
-                result = loop.run_until_complete(self._schedule_with_shared_session(campaign_id, target_date))
-                return result
-            finally:
-                # Proper cleanup - cancel all pending tasks
-                pending_tasks = asyncio.all_tasks(loop)
-                for task in pending_tasks:
-                    task.cancel()
-                
-                # Wait for tasks to complete cancellation
-                if pending_tasks:
-                    loop.run_until_complete(asyncio.gather(*pending_tasks, return_exceptions=True))
-                
-                # Close the loop completely
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.close()
-                
-                # Restore the old loop if there was one
-                if old_loop:
-                    asyncio.set_event_loop(old_loop)
-                
-        except Exception as e:
-            logger.error(f"Error scheduling calls for campaign {campaign_id}: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            raise self.retry(exc=e, countdown=60 * 5)  # Retry after 5 minutes
-    
-    async def _schedule_with_shared_session(self, campaign_id: str, target_date: date) -> List[Dict[str, Any]]:
-        """Schedule calls using a shared session to prevent connection leaks."""
-        session = None
-        try:
-            # Create a session with explicit autoclose settings
-            session = SessionLocal()
+            if target_date_str:
+                args.append(target_date_str)
             
-            # Verify the session connection is working before proceeding
-            await session.execute(text("SELECT 1"))
-            
-            # Import services here to avoid circular imports
-            from ...services.campaign.factory import create_campaign_service_async
-            from ...services.call.factory import create_call_service_async
-            
-            # Create services with explicit shared session
-            campaign_service = await create_campaign_service_async(session=session)
-            call_service = await create_call_service_async(session=session)
-            
-            # Create service and run the main task operation
-            service = self.service_class()
-            
-            # Execute the scheduling operation with the shared session
-            result = await service.schedule_calls_for_campaign(
-                campaign_id,
-                target_date,
-                campaign_service=campaign_service,
-                call_service=call_service,
-                session=session
+            # Execute the subprocess and capture its output
+            logger.info(f"Launching subprocess with args: {args}")
+            process = subprocess.Popen(
+                args, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                universal_newlines=True
             )
             
-            # Explicitly commit any pending changes
-            await session.commit()
-            return result
+            # Get output with timeout
+            stdout, stderr = process.communicate(timeout=180)  # 3 minute timeout
             
+            # Check for errors in stderr
+            if stderr and process.returncode != 0:
+                logger.error(f"Subprocess error: {stderr}")
+                raise Exception(f"Subprocess failed: {stderr}")
+            
+            # Process output - it should be JSON
+            try:
+                if stdout.strip():
+                    result = json.loads(stdout)
+                    
+                    # Log diagnostics if present
+                    if isinstance(result, dict) and 'diagnostics' in result:
+                        diagnostics = result.get('diagnostics', {})
+                        
+                        # Log important information from diagnostics
+                        if diagnostics.get('error'):
+                            logger.error(f"Subprocess encountered an error: {diagnostics['error']}")
+                        
+                        if diagnostics.get('warning'):
+                            logger.warning(f"Subprocess warning: {diagnostics['warning']}")
+                        
+                        if 'reason_no_calls' in diagnostics:
+                            logger.info(f"Reason no calls were scheduled: {diagnostics['reason_no_calls']}")
+                        
+                        # Log a summary of the execution
+                        logger.info(
+                            f"Subprocess execution summary: "
+                            f"Campaign '{diagnostics.get('campaign_details', {}).get('name')}', "
+                            f"Leads: {diagnostics.get('lead_count', 0)}, "
+                            f"Calls scheduled: {diagnostics.get('calls_scheduled', 0)}, "
+                            f"Steps completed: {', '.join(diagnostics.get('steps_completed', []))}"
+                        )
+                        
+                        # Extract the actual scheduled calls from the result
+                        scheduled_calls = result.get('scheduled_calls', [])
+                        logger.info(f"Subprocess completed successfully with {len(scheduled_calls)} calls scheduled")
+                        return scheduled_calls
+                    else:
+                        # Legacy format handling
+                        logger.info(f"Subprocess completed successfully with {len(result)} calls scheduled")
+                        return result
+                else:
+                    logger.warning("Subprocess returned empty output")
+                    return []
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse subprocess output: {e}")
+                logger.error(f"Raw output: {stdout[:1000]}")  # Log first 1000 chars
+                return []
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"Subprocess timed out for campaign {campaign_id}")
+            # Kill the process if it's still running
+            if process and process.poll() is None:
+                process.kill()
+            raise self.retry(
+                exc=Exception(f"Subprocess timed out for campaign {campaign_id}"), 
+                countdown=60 * 5
+            )
         except Exception as e:
-            # Explicitly rollback on errors
-            if session:
-                await session.rollback()
-            logger.error(f"Error in _schedule_with_shared_session: {str(e)}")
-            raise
-        finally:
-            # Always close the session, but with error catching
-            if session:
-                try:
-                    # This is the critical step - we need to explicitly close the session
-                    # before the event loop is closed
-                    await session.close()
-                except Exception as close_error:
-                    logger.error(f"Error closing session: {str(close_error)}")
+            logger.error(f"Error scheduling calls for campaign {campaign_id}: {str(e)}")
+            raise self.retry(exc=e, countdown=60 * 5)  # Retry after 5 minutes
+
+    # Keep the original method for reference but don't use it
+    async def _schedule_with_shared_session(self, campaign_id: str, target_date: date) -> List[Dict[str, Any]]:
+        """Schedule calls using a shared session to prevent connection leaks."""
+        # ...existing code...
 
 
 class ScheduleAllCampaignsTask(BaseTask):
@@ -159,71 +159,57 @@ class ScheduleAllCampaignsTask(BaseTask):
         """
         logger.info(f"Scheduling calls for all campaigns on {target_date_str or 'today'}")
         
-        # Convert string date to date object if provided
-        if target_date_str:
-            try:
-                target_date = datetime.fromisoformat(target_date_str).date()
-            except ValueError:
-                logger.error(f"Invalid date format: {target_date_str}. Using today's date.")
-                target_date = date.today()
-        else:
-            target_date = date.today()
-            
         try:
-            # Create a fresh event loop that's properly isolated
-            old_loop = asyncio.get_event_loop() if asyncio.get_event_loop().is_running() else None
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Run the scheduling in a subprocess to guarantee clean event loop
+            args = [sys.executable, ALL_CAMPAIGNS_SUBPROCESS_SCRIPT]
             
+            if target_date_str:
+                args.append(target_date_str)
+            
+            # Execute the subprocess and capture its output
+            logger.info(f"Launching subprocess with args: {args}")
+            process = subprocess.Popen(
+                args, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                universal_newlines=True
+            )
+            
+            # Get output with timeout - allow more time since this processes multiple campaigns
+            stdout, stderr = process.communicate(timeout=600)  # 10 minute timeout
+            
+            # Check for errors in stderr
+            if stderr and process.returncode != 0:
+                logger.error(f"Subprocess error: {stderr}")
+                raise Exception(f"Subprocess failed: {stderr}")
+            
+            # Process output - it should be JSON
             try:
-                # Run our async function and capture the result
-                result = loop.run_until_complete(self._schedule_with_shared_session(target_date))
-                return result
-            finally:
-                # Proper cleanup - cancel all pending tasks
-                pending_tasks = asyncio.all_tasks(loop)
-                for task in pending_tasks:
-                    task.cancel()
+                if stdout.strip():
+                    result = json.loads(stdout)
+                    total_calls = sum(len(calls) for calls in result.values())
+                    logger.info(f"Subprocess completed successfully with {total_calls} calls scheduled across {len(result)} campaigns")
+                    return result
+                else:
+                    logger.warning("Subprocess returned empty output")
+                    return {}
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse subprocess output: {e}")
+                logger.error(f"Raw output: {stdout[:1000]}")  # Log first 1000 chars
+                return {}
                 
-                # Wait for tasks to complete cancellation
-                if pending_tasks:
-                    loop.run_until_complete(asyncio.gather(*pending_tasks, return_exceptions=True))
-                
-                # Close the loop completely
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.close()
-                
-                # Restore the old loop if there was one
-                if old_loop:
-                    asyncio.set_event_loop(old_loop)
-                
+        except subprocess.TimeoutExpired:
+            logger.error(f"Subprocess timed out for scheduling all campaigns")
+            # Kill the process if it's still running
+            if process and process.poll() is None:
+                process.kill()
+            raise self.retry(
+                exc=Exception(f"Subprocess timed out for scheduling all campaigns"), 
+                countdown=60 * 5
+            )
         except Exception as e:
             logger.error(f"Error scheduling calls for all campaigns: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
-            raise self.retry(exc=e, countdown=60 * 5)
-    
-    async def _schedule_with_shared_session(self, target_date: date) -> Dict[str, List[Dict[str, Any]]]:
-        """Schedule calls for all campaigns using a shared session."""
-        # Create a session directly
-        session = SessionLocal()
-        
-        try:
-            # Create services with explicit shared session
-            from ...services.campaign.factory import create_campaign_service_async
-            campaign_service = await create_campaign_service_async(session=session)
-            
-            # Create service and run the operation
-            service = self.service_class()
-            
-            # Execute the scheduling operation with the shared session
-            return await service.schedule_calls_for_all_campaigns(
-                target_date,
-                get_session=lambda: session  # Pass a function that returns the session
-            )
-        finally:
-            # Make sure to close the session no matter what
-            await session.close()
+            raise self.retry(exc=e, countdown=60 * 5)  # Retry after 5 minutes
 
 
 # Create and register tasks with Celery
