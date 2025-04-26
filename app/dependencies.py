@@ -186,3 +186,17 @@ async def get_analytics_service(db: AsyncSession = Depends(get_db)) -> DefaultAn
             detail="Error initializing analytics service"
         )
 
+async def get_reporting_service(db: AsyncSession = Depends(get_db)) -> ReportingService:
+    """
+    Dependency to get the reporting service instance.
+    """
+    try:
+        from backend.services.reporting.factory import create_reporting_service
+        return create_reporting_service(db)
+    except Exception as e:
+        logger.error(f"Error creating reporting service: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error initializing reporting service"
+        )
+
