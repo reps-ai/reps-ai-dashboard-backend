@@ -6,6 +6,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy import select, and_, or_
 from contextlib import asynccontextmanager
 
+from backend.celery_app import app
 from ...db.connections.database import get_db
 from ...db.models.campaign.follow_up_campaign import FollowUpCampaign
 from ...utils.logging.logger import get_logger
@@ -327,9 +328,11 @@ class CampaignSchedulingService:
         prioritized_leads = prioritized_leads[:calls_to_schedule]
         
         # Schedule calls for the prioritized leads
-        return await create_scheduled_calls(
+        scheduled_calls = await create_scheduled_calls(
             prioritized_leads, campaign_id, target_date, CALL_HOURS_START, CALL_HOURS_END
         )
+        # No code in this file expects 'id' from scheduled_calls, only 'task_id' is used for tracking/revocation.
+        return scheduled_calls
 
     async def schedule_calls_for_all_campaigns(self, target_date: Optional[date] = None) -> Dict[str, List[Dict[str, Any]]]:
         """

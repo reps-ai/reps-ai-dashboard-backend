@@ -22,6 +22,9 @@ class PostgresCampaignRepository(CampaignRepository):
 
     async def create_campaign(self, campaign_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new campaign with scheduling parameters."""
+        # Ensure metrics is present and is a dict (JSONB column)
+        if "metrics" not in campaign_data or campaign_data["metrics"] is None:
+            campaign_data["metrics"] = {}
         # Create campaign record
         campaign = FollowUpCampaign(**campaign_data)
         self.session.add(campaign)
@@ -38,6 +41,9 @@ class PostgresCampaignRepository(CampaignRepository):
 
     async def update_campaign(self, campaign_id: str, campaign_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update campaign details."""
+        # Ensure metrics is present and is a dict if being updated
+        if "metrics" in campaign_data and campaign_data["metrics"] is None:
+            campaign_data["metrics"] = {}
         query = (
             update(FollowUpCampaign)
             .where(FollowUpCampaign.id == campaign_id)
@@ -57,14 +63,14 @@ class PostgresCampaignRepository(CampaignRepository):
         await self.session.commit()
         return result.rowcount > 0
 
-    async def get_active_campaigns(self, gym_id: str) -> List[Dict[str, Any]]:
-        """Get all active campaigns for a gym."""
+    async def get_active_campaigns_by_branch(self, branch_id: str) -> List[Dict[str, Any]]:
+        """Get all active campaigns for a branch."""
         # Since there's no is_active field, we need to filter by date range
         current_date = datetime.now().date()
         
         query = (
             select(FollowUpCampaign)
-            .where(FollowUpCampaign.gym_id == gym_id)
+            .where(FollowUpCampaign.branch_id == branch_id)
             .where(
                 and_(
                     or_(
@@ -80,6 +86,10 @@ class PostgresCampaignRepository(CampaignRepository):
         )
         result = await self.session.execute(query)
         return [campaign.to_dict() for campaign in result.scalars().all()]
+
+    async def get_active_campaigns(self, branch_id: str) -> List[Dict[str, Any]]:
+        """Alias for get_active_campaigns_by_branch for backward compatibility."""
+        return await self.get_active_campaigns_by_branch(branch_id)
 
     async def get_campaigns_for_date(self, target_date: date) -> List[Dict[str, Any]]:
         """Get campaigns scheduled for a specific date."""
@@ -296,3 +306,42 @@ class PostgresCampaignRepository(CampaignRepository):
         query = select(CallLog.id).where(CallLog.campaign_id == campaign_id)
         result = await self.session.execute(query)
         return [str(row[0]) for row in result.all()]
+
+    async def get_campaigns_by_branch(self, branch_id: str) -> List[Dict[str, Any]]:
+        """Get all campaigns for a branch (no date filtering)."""
+        query = select(FollowUpCampaign).where(FollowUpCampaign.branch_id == branch_id)
+        result = await self.session.execute(query)
+        return [campaign.to_dict() for campaign in result.scalars().all()]
+
+    async def filter_campaigns_by_branch(self, branch_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Get all campaigns for a branch with SQL-level filtering.
+        Supported filters: status, search, date (start_date/end_date overlap), campaign_status, name, etc.
+        """
+        query = select(FollowUpCampaign).where(FollowUpCampaign.branch_id == branch_id)
+        if filters:
+            if "status" in filters:
+                query = query.where(FollowUpCampaign.campaign_status == filters["status"])
+            if "campaign_status" in filters:
+                query = query.where(FollowUpCampaign.campaign_status == filters["campaign_status"])
+            if "search" in filters:
+                search = f"%{filters['search']}%"
+                query = query.where(FollowUpCampaign.name.ilike(search))
+            if "date" in filters:
+                target_date = filters["date"]
+                query = query.where(
+                    or_(
+                        FollowUpCampaign.start_date == None,
+                        FollowUpCampaign.start_date <= target_date
+                    ),
+                    or_(
+                        FollowUpCampaign.end_date == None,
+                        FollowUpCampaign.end_date >= target_date
+                    )
+                )
+            if "name" in filters:
+                query = query.where(FollowUpCampaign.name == filters["name"])
+            # Add more filters as needed
+
+        result = await self.session.execute(query)
+        return [campaign.to_dict() for campaign in result.scalars().all()]

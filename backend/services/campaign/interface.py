@@ -100,12 +100,12 @@ class CampaignService(ABC):
         pass
     
     @abstractmethod
-    async def list_campaigns(self, gym_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def list_campaigns(self, branch_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        List campaigns for a gym with optional filtering.
+        List campaigns for a branch with optional filtering.
         
         Args:
-            gym_id: ID of the gym
+            branch_id: ID of the branch
             filters: Optional filters for the campaigns
             
         Returns:

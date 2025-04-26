@@ -184,3 +184,17 @@ class CampaignRepository(ABC):
             List of call IDs
         """
         pass
+
+    @abstractmethod
+    async def filter_campaigns_by_branch(self, branch_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """
+        Get all campaigns for a branch with SQL-level filtering.
+
+        Args:
+            branch_id: ID of the branch
+            filters: Optional filters for the campaigns
+
+        Returns:
+            List of campaigns matching the criteria
+        """
+        pass

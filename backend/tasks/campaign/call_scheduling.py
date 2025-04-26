@@ -55,7 +55,7 @@ async def create_scheduled_calls(
             
             # This is where the magic happens - the call is triggered at the specific time (eta)
             # using Celery's delayed task execution 
-            trigger_call_task.apply_async(
+            task = trigger_call_task.apply_async(
                 args=[str(lead.get('id')), str(campaign_id)],
                 eta=eta
             )
@@ -64,10 +64,11 @@ async def create_scheduled_calls(
                 'lead_id': lead.get('id'),
                 'campaign_id': campaign_id,
                 'scheduled_time': scheduled_time.isoformat(),
-                'status': 'scheduled'
+                'status': 'scheduled',
+                'task_id': task.id  # Store the Celery task ID for task tracking/revocation
             })
             
-            logger.info(f"Scheduled call to lead {lead.get('id')} for campaign {campaign_id} at {scheduled_time}")
+            logger.info(f"Scheduled call to lead {lead.get('id')} for campaign {campaign_id} at {scheduled_time} (task ID: {task.id})")
         except Exception as e:
             logger.error(f"Error scheduling call for lead {lead.get('id')}: {str(e)}")
     

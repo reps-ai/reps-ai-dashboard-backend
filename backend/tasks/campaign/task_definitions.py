@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, date
 import asyncio
 
-from ...celery_app import app
+from backend.celery_app import app
 from ...tasks.base import BaseTask
 from ...utils.logging.logger import get_logger
 from asgiref.sync import async_to_sync

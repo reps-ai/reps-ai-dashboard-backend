@@ -4,6 +4,7 @@ Implementation of the Campaign Management Service.
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date, timedelta
 import uuid
+import json
 
 from .interface import CampaignService
 from ...db.repositories.campaign import CampaignRepository
@@ -28,25 +29,37 @@ class DefaultCampaignService(CampaignService):
     async def create_campaign(self, campaign_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new call campaign.
-        
-        Args:
-            campaign_data: Dictionary containing campaign configuration
-            
-        Returns:
-            Dictionary containing the created campaign details
-            
-        Raises:
-            ValueError: If there's an error creating the campaign
         """
         try:
             logger.info(f"Creating campaign with data: {campaign_data}")
-            
-            # Validate required fields
-            required_fields = ['name', 'gym_id']
+            required_fields = ['name', 'branch_id']
             for field in required_fields:
                 if field not in campaign_data:
                     raise ValueError(f"Missing required field: {field}")
-            
+            if 'campaign_status' not in campaign_data:
+                campaign_data['campaign_status'] = 'not_started'
+
+            # --- Fix: Ensure metrics is a plain dict and deeply serializable ---
+            metrics = campaign_data.get("metrics")
+            if metrics is None:
+                campaign_data["metrics"] = {}
+            elif hasattr(metrics, "dict"):
+                campaign_data["metrics"] = metrics.dict()
+            elif not isinstance(metrics, dict):
+                try:
+                    campaign_data["metrics"] = json.loads(metrics)
+                except Exception:
+                    campaign_data["metrics"] = {}
+            # Deep copy to ensure no non-serializable types
+            try:
+                campaign_data["metrics"] = json.loads(json.dumps(campaign_data["metrics"]))
+            except Exception as e:
+                logger.error(f"Failed to serialize metrics: {e}")
+                campaign_data["metrics"] = {}
+
+            logger.info(f"Metrics before DB insert: {campaign_data['metrics']} (type: {type(campaign_data['metrics'])})")
+            # --- End fix ---
+
             # Format schedule data if present
             if schedule_data := campaign_data.get('schedule'):
                 # Ensure dates are in the correct format
@@ -58,7 +71,6 @@ class DefaultCampaignService(CampaignService):
             
             # Create campaign using repository
             campaign = await self.campaign_repository.create_campaign(campaign_data)
-            
             logger.info(f"Created campaign with ID: {campaign.get('id')}")
             return campaign
             
@@ -257,56 +269,21 @@ class DefaultCampaignService(CampaignService):
             logger.error(f"Error retrieving metrics for campaign {campaign_id}: {str(e)}")
             raise ValueError(f"Error retrieving campaign metrics: {str(e)}")
     
-    async def list_campaigns(self, gym_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    async def list_campaigns(self, branch_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
-        List campaigns for a gym with optional filtering.
-        
-        Args:
-            gym_id: ID of the gym
-            filters: Optional filters for the campaigns
-            
-        Returns:
-            List of campaigns matching the criteria
-            
-        Raises:
-            ValueError: If an error occurs during retrieval
+        List campaigns for a branch with optional filtering.
         """
         try:
-            logger.info(f"Listing campaigns for gym: {gym_id}")
-            
-            # Get active campaigns for the gym
-            campaigns = await self.campaign_repository.get_active_campaigns(gym_id)
-            
-            # Apply filters if provided
-            if filters:
-                filtered_campaigns = []
-                
-                # Filter by date if specified
-                if 'date' in filters:
-                    target_date = filters['date']
-                    if isinstance(target_date, str):
-                        target_date = datetime.fromisoformat(target_date.replace('Z', '+00:00')).date()
-                    elif isinstance(target_date, datetime):
-                        target_date = target_date.date()
-                    
-                    # Get campaigns scheduled for the target date
-                    date_campaigns = await self.campaign_repository.get_campaigns_for_date(target_date)
-                    campaign_ids = {campaign['id'] for campaign in date_campaigns}
-                    
-                    # Keep only campaigns that match both gym_id and date criteria
-                    filtered_campaigns = [campaign for campaign in campaigns if campaign['id'] in campaign_ids]
-                else:
-                    filtered_campaigns = campaigns
-                
-                # Apply other filters as needed
-                # ...
-                
-                return filtered_campaigns
-            
+            logger.info(f"Listing campaigns for branch: {branch_id}")
+
+            # Use repository method to apply all filters at the SQL level
+            campaigns = await self.campaign_repository.filter_campaigns_by_branch(branch_id, filters)
+
+            # No further filtering in Python; all filtering is done in SQL
             return campaigns
-            
+
         except Exception as e:
-            logger.error(f"Error listing campaigns for gym {gym_id}: {str(e)}")
+            logger.error(f"Error listing campaigns for branch {branch_id}: {str(e)}")
             raise ValueError(f"Error listing campaigns: {str(e)}")
             
     # Additional helper methods for campaign management
