@@ -271,6 +271,161 @@ Here's how to create daily reports for your gym:
 
 5. **Check your email** for the beautiful report!
 
+## Data Format and Table Structure
+
+The reporting system relies on certain data in your database. Here's what each table needs to have:
+
+### Existing Tables Used by the Reporting System
+
+#### `leads` Table
+This table contains information about potential gym members:
+
+| Column | Type | Description | Example |
+|--------|------|-------------|---------|
+| id | UUID | Unique identifier | 11111111-1111-1111-1111-111111111111 |
+| branch_id | UUID | Branch ID | 22222222-2222-2222-2222-222222222222 |
+| gym_id | UUID | Gym ID | 33333333-3333-3333-3333-333333333333 |
+| first_name | String | Lead's first name | John |
+| last_name | String | Lead's last name | Doe |
+| phone | String | Phone number | +15551234567 |
+| email | String | Email address | john@example.com |
+| lead_status | String | Current status | new, contacted, qualified, converted, lost |
+| created_at | DateTime | When created | 2025-04-25 10:30:00 |
+| updated_at | DateTime | When updated | 2025-04-25 15:45:00 |
+
+#### `call_logs` Table
+This table tracks calls made to leads:
+
+| Column | Type | Description | Example |
+|--------|------|-------------|---------|
+| id | UUID | Unique identifier | 44444444-4444-4444-4444-444444444444 |
+| lead_id | UUID | Related lead | 11111111-1111-1111-1111-111111111111 |
+| branch_id | UUID | Branch ID | 22222222-2222-2222-2222-222222222222 |
+| gym_id | UUID | Gym ID | 33333333-3333-3333-3333-333333333333 |
+| user_id | UUID | Staff who made call | 55555555-5555-5555-5555-555555555555 |
+| direction | String | Call direction | outbound |
+| status | String | Call status | completed, missed, failed |
+| outcome | String | Call outcome | interested, not_interested, wrong_number |
+| duration | Integer | Duration in seconds | 120 |
+| created_at | DateTime | When call happened | 2025-04-25 11:30:00 |
+| notes | Text | Call notes | Customer asked about pricing |
+
+### New Tables Created by the Reporting System
+
+#### `report_templates` Table
+Stores HTML templates for report formatting:
+
+| Column | Type | Description | Example |
+|--------|------|-------------|---------|
+| id | UUID | Unique identifier | 66666666-6666-6666-6666-666666666666 |
+| name | String | Template name | Custom Daily Report |
+| description | Text | Description | Report template with company branding |
+| template_type | String | Type of template | html |
+| template_content | Text | HTML content | `<!DOCTYPE html><html>...</html>` |
+| created_at | DateTime | When created | 2025-04-25 09:00:00 |
+| updated_at | DateTime | When updated | 2025-04-25 09:00:00 |
+
+#### `report_subscriptions` Table
+Manages who gets what reports and when:
+
+| Column | Type | Description | Example |
+|--------|------|-------------|---------|
+| id | UUID | Unique identifier | 77777777-7777-7777-7777-777777777777 |
+| branch_id | UUID | Branch ID | 22222222-2222-2222-2222-222222222222 |
+| gym_id | UUID | Gym ID | 33333333-3333-3333-3333-333333333333 |
+| report_type | String | Type of report | daily, weekly |
+| template_id | UUID | Template ID (optional) | 66666666-6666-6666-6666-666666666666 |
+| is_active | Boolean | Whether active | true |
+| delivery_method | String | How to deliver | email, slack |
+| recipients | JSON | Who receives it | ["manager@example.com"] |
+| delivery_time | String | When to deliver | 09:00 |
+| delivery_days | JSON | Days to deliver (weekly) | ["Monday"] |
+| created_by | UUID | User who created | 55555555-5555-5555-5555-555555555555 |
+| created_at | DateTime | When created | 2025-04-25 09:00:00 |
+| updated_at | DateTime | When updated | 2025-04-25 09:00:00 |
+
+#### `report_deliveries` Table
+Tracks report generation and delivery history:
+
+| Column | Type | Description | Example |
+|--------|------|-------------|---------|
+| id | UUID | Unique identifier | 88888888-8888-8888-8888-888888888888 |
+| report_type | String | Type of report | daily, weekly |
+| branch_id | UUID | Branch ID | 22222222-2222-2222-2222-222222222222 |
+| gym_id | UUID | Gym ID | 33333333-3333-3333-3333-333333333333 |
+| template_id | UUID | Template ID (optional) | 66666666-6666-6666-6666-666666666666 |
+| recipients | JSON | Who receives it | ["manager@example.com"] |
+| report_data | JSON | Report data cache | {...} |
+| report_period_start | DateTime | Start of period | 2025-04-25 00:00:00 |
+| report_period_end | DateTime | End of period | 2025-04-25 23:59:59 |
+| delivery_status | String | Delivery status | pending, sent, failed |
+| delivery_time | DateTime | When delivered | 2025-04-26 09:00:00 |
+| error_message | Text | Error if failed | SMTP connection refused |
+| created_at | DateTime | When created | 2025-04-26 09:00:00 |
+| updated_at | DateTime | When updated | 2025-04-26 09:00:00 |
+
+### How to Add Sample Data
+
+To insert sample data into these tables:
+
+#### 1. Create a Template:
+```sql
+INSERT INTO report_templates (id, name, description, template_type, template_content, created_at, updated_at)
+VALUES (
+  '66666666-6666-6666-6666-666666666666', 
+  'Custom Daily Report', 
+  'Report template with company branding', 
+  'html',
+  '<!DOCTYPE html><html><head><title>Daily Report</title></head><body><h1>Daily Report</h1></body></html>',
+  NOW(), 
+  NOW()
+);
+```
+
+#### 2. Create a Subscription:
+```sql
+INSERT INTO report_subscriptions (id, branch_id, gym_id, report_type, template_id, is_active, delivery_method, recipients, delivery_time, delivery_days, created_by, created_at, updated_at)
+VALUES (
+  '77777777-7777-7777-7777-777777777777',
+  '22222222-2222-2222-2222-222222222222',
+  '33333333-3333-3333-3333-333333333333',
+  'daily',
+  '66666666-6666-6666-6666-666666666666',
+  true,
+  'email',
+  '["manager@example.com"]',
+  '09:00',
+  NULL,
+  '55555555-5555-5555-5555-555555555555',
+  NOW(),
+  NOW()
+);
+```
+
+#### 3. For Testing, Create a Delivery Record:
+```sql
+INSERT INTO report_deliveries (id, report_type, branch_id, gym_id, template_id, recipients, report_period_start, report_period_end, delivery_status, created_at, updated_at)
+VALUES (
+  '88888888-8888-8888-8888-888888888888',
+  'daily',
+  '22222222-2222-2222-2222-222222222222',
+  '33333333-3333-3333-3333-333333333333',
+  '66666666-6666-6666-6666-666666666666',
+  '["manager@example.com"]',
+  '2025-04-25 00:00:00',
+  '2025-04-25 23:59:59',
+  'pending',
+  NOW(),
+  NOW()
+);
+```
+
+### Where to Store This Data
+
+All of this data is stored in your existing PostgreSQL database (Neon). The database migration automatically creates the new tables when you run `alembic upgrade head`.
+
+The reporting system uses your existing lead and call data to generate reports, and it stores templates, subscriptions, and delivery history in the new tables.
+
 ## Troubleshooting
 
 ### Reports aren't being generated
